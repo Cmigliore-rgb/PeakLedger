@@ -105,7 +105,7 @@ export default function Pricing() {
 
         {/* How billing works */}
         <div style={{ background: CARD, border: BORDER, borderRadius: 16, padding: '36px 32px', marginBottom: 32 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', marginBottom: 28, margin: 0, marginBottom: 24 }}>How billing works</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', margin: 0, marginBottom: 24 }}>How billing works</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 28 }}>
             {[
               {

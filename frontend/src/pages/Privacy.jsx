@@ -21,7 +21,7 @@ export default function Privacy() {
         <Link to="/" style={S.back}>← Back</Link>
 
         <h1 style={S.h1}>Privacy Policy</h1>
-        <p style={S.date}>Last updated: May 7, 2026</p>
+        <p style={S.date}>Last updated: May 17, 2026</p>
 
         <p style={S.p}>
           PeakLedger ("we," "our," or "us") is committed to protecting your privacy. This Privacy
@@ -72,22 +72,40 @@ export default function Privacy() {
           </a>. Plaid may collect and process your data according to their own policies. We encourage
           you to review them.</p>
 
-        <h2 style={S.h2}>5. Data Retention and Deletion</h2>
+        <h2 style={S.h2}>5. Google Calendar Integration</h2>
+        <p style={S.p}>If you choose to connect your Google Calendar, PeakLedger requests read-only access
+          (<code>calendar.readonly</code>) to your primary Google Calendar. We use this access solely to
+          display your upcoming calendar events alongside your financial data so you can plan spending
+          around scheduled commitments.</p>
+        <ul style={S.ul}>
+          <li style={S.li}>We access event titles and dates from your primary calendar</li>
+          <li style={S.li}>We do not read event descriptions, attendees, or any other calendar metadata</li>
+          <li style={S.li}>Calendar data is fetched on demand and is not stored permanently on our servers</li>
+          <li style={S.li}>We do not share your calendar data with any third party</li>
+          <li style={S.li}>You can disconnect Google Calendar at any time from your dashboard settings</li>
+        </ul>
+        <p style={S.p}>PeakLedger's use and transfer of information received from Google APIs adheres to the{' '}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" style={S.a} target="_blank" rel="noreferrer">
+            Google API Services User Data Policy
+          </a>, including the Limited Use requirements.</p>
+
+        <h2 style={S.h2}>6. Data Retention and Deletion</h2>
+
         <p style={S.p}>We retain your data for as long as your account is active. You may permanently delete
           your account and all associated data at any time from Settings, under Account, using the
           Delete Account option. This action removes all financial data, Plaid connections, and account
           information from our servers and is irreversible.</p>
 
-        <h2 style={S.h2}>6. Cookies and Local Storage</h2>
+        <h2 style={S.h2}>7. Cookies and Local Storage</h2>
         <p style={S.p}>We use your browser's local storage to persist your authentication token across
           sessions. We do not use third-party tracking cookies or advertising cookies.</p>
 
-        <h2 style={S.h2}>7. Changes to This Policy</h2>
+        <h2 style={S.h2}>8. Changes to This Policy</h2>
         <p style={S.p}>We may update this Privacy Policy from time to time. We will notify you of material
           changes by updating the "Last updated" date at the top of this page. Continued use of the
           Service after changes constitutes acceptance of the updated policy.</p>
 
-        <h2 style={S.h2}>8. Contact</h2>
+        <h2 style={S.h2}>9. Contact</h2>
         <p style={S.p}>If you have questions about this Privacy Policy or your data, contact us at{' '}
           <a href="mailto:support@peakledger.app" style={S.a}>support@peakledger.app</a>.</p>
       </div>

@@ -3126,6 +3126,14 @@ export default function Dashboard() {
   );
   const [toast, setToast] = useState(null);
   const [layoutOrder, setLayoutOrder] = useState(() => { try { return JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}'); } catch { return {}; } });
+  // Re-load layout order once user ID is known (handles async auth where user?.id is undefined at mount)
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(`pl_layout_order_${user.id}`) || '{}');
+      if (Object.keys(stored).length) setLayoutOrder(stored);
+    } catch {}
+  }, [user?.id]); // eslint-disable-line
   const getOrder = (key, defaults) => { const s = layoutOrder[key]; if (!s?.length) return defaults; const ss = new Set(s); return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))]; };
   const handleReorder = (key, defaults) => (srcId, tgtId) => { const order = getOrder(key, defaults); const si = order.indexOf(srcId), ti = order.indexOf(tgtId); if (si === -1 || ti === -1 || si === ti) return; const next = [...order]; next.splice(si, 1); next.splice(ti, 0, srcId); setLayoutOrder(prev => ({ ...prev, [key]: next })); };
   const resetLayout = (key) => setLayoutOrder(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -3562,6 +3570,7 @@ export default function Dashboard() {
   const [projReturnRate, setProjReturnRate] = useState(7);
   const [projSavingsAdj, setProjSavingsAdj] = useState(0);
   const [gcalConnected, setGcalConnected] = useState(false);
+  const [gcalError, setGcalError] = useState(null);
   const [accent, setAccent] = useState(() => localStorage.getItem('pl_accent') || 'blue');
   const ACCENT_PRESETS = {
     blue:   { accent: '#4da3ff', btn: '#0066f5' },
@@ -3664,9 +3673,17 @@ export default function Dashboard() {
 
   const getTourSteps = () => {
     const base = effectiveProfessor ? PROFESSOR_TOUR_STEPS : effectiveStudent ? STUDENT_TOUR_STEPS : FINANCE_TOUR_STEPS;
-    const ovOrd = getOrder('overview', ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
-    const cfOrd = getOrder('cashflow-tabs', ['banking', 'budgeting', 'taxes', 'scholarship']);
-    const inOrd = getOrder('insights-tabs', ['markets', 'news', 'signals', 'options']);
+    // Read from both state (current-session drags) and localStorage (persisted across sessions)
+    const persisted = (() => { try { return JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}'); } catch { return {}; } })();
+    const getOrd = (key, defaults) => {
+      const s = layoutOrder[key] || persisted[key];
+      if (!s?.length) return defaults;
+      const ss = new Set(s);
+      return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))];
+    };
+    const ovOrd = getOrd('overview', ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
+    const cfOrd = getOrd('cashflow-tabs', ['banking', 'budgeting', 'taxes', 'scholarship']);
+    const inOrd = getOrd('insights-tabs', ['markets', 'news', 'signals', 'options']);
     return buildSortedSteps(base, ovOrd, cfOrd, inOrd);
   };
 
@@ -5145,7 +5162,7 @@ export default function Dashboard() {
               <span style={{ fontSize: 22, flexShrink: 0 }}>📅</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>Google Calendar</div>
-                <div style={{ fontSize: 11, color: gcalConnected ? GREEN : TEXT3 }}>{gcalConnected ? 'Connected — syncs automatically' : 'Live sync with your Google Calendar'}</div>
+                <div style={{ fontSize: 11, color: gcalConnected ? GREEN : TEXT3 }}>{gcalConnected ? 'Connected; syncs automatically' : 'Live sync with your Google Calendar'}</div>
               </div>
               {gcalConnected ? (
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -5156,9 +5173,15 @@ export default function Dashboard() {
                   <button onClick={() => api.delete('/calendar/google/disconnect').then(() => { setGcalConnected(false); setCalendarEvents(prev => prev.filter(e => !e._gcal)); }).catch(() => {})} style={{ padding: '6px 12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 7, color: RED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Disconnect</button>
                 </div>
               ) : (
-                <button onClick={() => api.get('/calendar/google/auth').then(r => { window.location.href = r.data.url; }).catch(() => {})} style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Connect</button>
+                <button onClick={() => {
+                  setGcalError(null);
+                  api.get('/calendar/google/auth')
+                    .then(r => { if (r.data.url) { window.location.href = r.data.url; } else { setGcalError('No auth URL returned.'); } })
+                    .catch(err => { const msg = err?.response?.data?.error || 'Connection failed.'; setGcalError(msg.includes('not configured') ? 'GOOGLE_CLIENT_SECRET is not set in environment variables.' : msg); });
+                }} style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Connect</button>
               )}
             </div>
+            {gcalError && <div style={{ fontSize: 11, color: RED, marginTop: 6, marginLeft: 4 }}>{gcalError}</div>}
 
             {/* Import row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: DARK, border: BORDER, borderRadius: 10, marginBottom: 10 }}>
@@ -7585,8 +7608,8 @@ export default function Dashboard() {
                               <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Savings Rate Trend</div>
                               <div style={{ fontSize: 11, color: TEXT3, marginBottom: 14 }}>Month-by-month savings rate</div>
                               <div>
-                                <div style={{ position: 'relative', height: 100 }}>
-                                  <div style={{ position: 'absolute', top: 46, left: 0, right: 0, height: 1, background: BORDER_C }} />
+                                <div style={{ position: 'relative', height: 130 }}>
+                                  <div style={{ position: 'absolute', top: 68, left: 0, right: 0, height: 1, background: BORDER_C }} />
                                   <div style={{ display: 'flex', height: '100%', gap: 6 }}>
                                     {months.map((m, i) => {
                                       const r = rateByMonth[i];
@@ -7597,15 +7620,15 @@ export default function Dashboard() {
                                       return (
                                         <div key={i} style={{ flex: 1, position: 'relative' }}>
                                           {isPos && r !== null && (
-                                            <div style={{ position: 'absolute', top: Math.max(1, 46 - barH - 13), left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
+                                            <div style={{ position: 'absolute', top: 68 - barH - 14, left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
                                           )}
                                           {r !== null && (
-                                            <div style={{ position: 'absolute', left: '10%', right: '10%', height: barH, background: c, borderRadius: isPos ? '3px 3px 0 0' : '0 0 3px 3px', opacity: 0.85, ...(isPos ? { top: 46 - barH } : { top: 47 }) }} />
+                                            <div style={{ position: 'absolute', left: '10%', right: '10%', height: barH, background: c, borderRadius: isPos ? '3px 3px 0 0' : '0 0 3px 3px', opacity: 0.85, ...(isPos ? { top: 68 - barH } : { top: 70 }) }} />
                                           )}
                                           {!isPos && r !== null && (
-                                            <div style={{ position: 'absolute', top: 48 + barH, left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
+                                            <div style={{ position: 'absolute', top: 72 + barH, left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
                                           )}
-                                          {r === null && <div style={{ position: 'absolute', top: 42, left: 0, right: 0, fontSize: 10, color: TEXT3, textAlign: 'center' }}>—</div>}
+                                          {r === null && <div style={{ position: 'absolute', top: 63, left: 0, right: 0, fontSize: 10, color: TEXT3, textAlign: 'center' }}>—</div>}
                                         </div>
                                       );
                                     })}

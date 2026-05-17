@@ -244,10 +244,16 @@ export default function Landing() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center', marginTop: 48, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 20, justifyContent: 'center', alignItems: 'center', marginTop: 48, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: TEXT3 }}>Secured by</span>
-            <div style={{ background: '#fff', borderRadius: 8, padding: '7px 18px', fontSize: 13, fontWeight: 800, color: '#000', letterSpacing: '-0.5px' }}>Plaid</div>
-            <div style={{ background: '#635bff', borderRadius: 8, padding: '7px 18px', fontSize: 13, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>Stripe</div>
+            <div style={{ background: '#fff', borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <img src="https://www.google.com/s2/favicons?domain=plaid.com&sz=32" alt="Plaid" style={{ width: 18, height: 18, borderRadius: 3 }} />
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#000', letterSpacing: '-0.3px' }}>Plaid</span>
+            </div>
+            <div style={{ background: '#635bff', borderRadius: 8, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <img src="https://www.google.com/s2/favicons?domain=stripe.com&sz=32" alt="Stripe" style={{ width: 18, height: 18, borderRadius: 3 }} />
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px' }}>Stripe</span>
+            </div>
           </div>
         </div>
       </section>
@@ -271,15 +277,80 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer style={{ borderTop: `1px solid ${BORDER}`, padding: '32px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, background: BG }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/logo-icon.png?v=7" alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
-          <span style={{ fontSize: 15, fontWeight: 700, color: TEXT, letterSpacing: '-0.3px' }}>PeakLedger</span>
+      <footer style={{ borderTop: `1px solid ${BORDER}`, background: '#050505' }}>
+        {/* Main footer grid */}
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 40px 40px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 40 }}>
+          {/* Brand */}
+          <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <img src="/logo-icon.png?v=7" alt="" style={{ width: 26, height: 26, borderRadius: 7 }} />
+              <span style={{ fontSize: 16, fontWeight: 800, color: TEXT, letterSpacing: '-0.5px' }}>PeakLedger</span>
+            </div>
+            <p style={{ fontSize: 13, color: TEXT3, lineHeight: 1.7, maxWidth: 220, margin: 0 }}>
+              Personal finance tools built for students, professionals, and investors who want clarity over their money.
+            </p>
+            <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+              <button onClick={() => navigate('/login')} style={{ padding: '8px 18px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 8, color: TEXT2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Sign In</button>
+              <button onClick={() => navigate('/register')} style={{ padding: '8px 18px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Get Started</button>
+            </div>
+          </div>
+
+          {/* Product */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Product</div>
+            {[
+              { label: 'Dashboard', action: () => navigate('/register') },
+              { label: 'Pricing', action: () => navigate('/pricing') },
+              { label: 'Desktop App', action: () => { const a = document.createElement('a'); a.href = DOWNLOAD_URL; a.download = ''; a.click(); } },
+              { label: 'Education Mode', action: () => navigate('/register') },
+            ].map(({ label, action }) => (
+              <button key={label} onClick={action} style={{ display: 'block', background: 'none', border: 'none', color: TEXT2, fontSize: 13, cursor: 'pointer', padding: '5px 0', textAlign: 'left', lineHeight: 1.5 }}>{label}</button>
+            ))}
+          </div>
+
+          {/* Company */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Company</div>
+            {[
+              { label: 'About', action: () => {} },
+              { label: 'Security', action: () => {} },
+              { label: 'For Professors', action: () => navigate('/register') },
+              { label: 'Contact', action: () => { window.location.href = 'mailto:support@peakledger.app'; } },
+            ].map(({ label, action }) => (
+              <button key={label} onClick={action} style={{ display: 'block', background: 'none', border: 'none', color: TEXT2, fontSize: 13, cursor: 'pointer', padding: '5px 0', textAlign: 'left', lineHeight: 1.5 }}>{label}</button>
+            ))}
+          </div>
+
+          {/* Legal */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Legal</div>
+            {[
+              { label: 'Terms of Service', action: () => navigate('/terms') },
+              { label: 'Privacy Policy', action: () => navigate('/privacy') },
+              { label: 'Security Policy', action: () => {} },
+              { label: 'Responsible Disclosure', action: () => { window.location.href = 'mailto:security@peakledger.app'; } },
+            ].map(({ label, action }) => (
+              <button key={label} onClick={action} style={{ display: 'block', background: 'none', border: 'none', color: TEXT2, fontSize: 13, cursor: 'pointer', padding: '5px 0', textAlign: 'left', lineHeight: 1.5 }}>{label}</button>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 13, color: TEXT3 }}>Personal finance, built for real life.</div>
-        <div style={{ display: 'flex', gap: 20 }}>
-          <button onClick={() => navigate('/login')}   style={{ background: 'none', border: 'none', color: TEXT2, fontSize: 13, cursor: 'pointer' }}>Sign In</button>
-          <button onClick={() => navigate('/register')} style={{ background: 'none', border: 'none', color: TEXT2, fontSize: 13, cursor: 'pointer' }}>Register</button>
+
+        {/* Bottom bar */}
+        <div style={{ borderTop: `1px solid ${BORDER}`, maxWidth: 1100, margin: '0 auto', padding: '20px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <span style={{ fontSize: 12, color: TEXT3 }}>© {new Date().getFullYear()} PeakLedger. All rights reserved.</span>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: TEXT3 }}>Built with</span>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', borderRadius: 5, padding: '3px 9px' }}>
+                <img src="https://www.google.com/s2/favicons?domain=plaid.com&sz=32" alt="" style={{ width: 14, height: 14, borderRadius: 2 }} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#000' }}>Plaid</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#635bff', borderRadius: 5, padding: '3px 9px' }}>
+                <img src="https://www.google.com/s2/favicons?domain=stripe.com&sz=32" alt="" style={{ width: 14, height: 14, borderRadius: 2 }} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>Stripe</span>
+              </div>
+            </div>
+          </div>
         </div>
       </footer>
 

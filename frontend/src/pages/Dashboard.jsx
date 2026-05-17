@@ -300,9 +300,9 @@ function logoUrls(name, ticker, logoUrl) {
   const lower = (name || '').toLowerCase();
   for (const [k, d] of Object.entries(NAME_DOMAIN)) {
     if (lower.includes(k)) {
-      // Always prefer Clearbit over potentially broken Plaid data URIs for known institutions
-      urls.push(`https://logo.clearbit.com/${d}`);
+      // Google favicon is most reliable; Clearbit as secondary
       urls.push(`https://www.google.com/s2/favicons?domain=${d}&sz=128`);
+      urls.push(`https://logo.clearbit.com/${d}`);
       return urls;
     }
   }
@@ -4572,7 +4572,7 @@ export default function Dashboard() {
               </button>
             </div>
           )}
-          <button onClick={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('pl_sidebar_collapsed', String(next)); } catch {} return next; })} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${BORDER_C}`, borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: TEXT2, fontSize: 16, flexShrink: 0 }}>{sidebarCollapsed ? '›' : '‹'}</button>
+          <button onClick={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('pl_sidebar_collapsed', String(next)); } catch {} return next; })} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: BLUE, fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{sidebarCollapsed ? '›' : '‹'}</button>
         </div>
         <nav style={{ flex: 1, paddingTop: 10, overflowY: 'auto' }}>
         <div data-tour="sidebar-nav">
@@ -7940,7 +7940,7 @@ export default function Dashboard() {
                           })}
                         </div>
                       </div>
-                      <div style={{ marginTop: 12 }}>
+                      <div style={{ marginTop: 12, marginBottom: 16 }}>
                         <AIInsightCard
                           isDemoData={showDemoAI}
                           demoKey="budgeting"

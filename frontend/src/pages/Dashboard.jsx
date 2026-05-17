@@ -5925,7 +5925,7 @@ export default function Dashboard() {
               const _h = new Date().getHours();
               const _g = _h < 12 ? 'Good morning' : _h < 17 ? 'Good afternoon' : 'Good evening';
               const _n = user?.name?.split(' ')[0] || 'there';
-              const _OV_DEF = ['stats', 'free-to-spend', 'age-of-money', 'savings-rate', 'chart', 'health', 'goals', 'txns', 'calendar'];
+              const _OV_DEF = ['stats', 'fts-aom', 'savings-rate', 'health-score', 'chart', 'health', 'goals', 'txns', 'calendar'];
               const _ovOrder = getOrder('overview', _OV_DEF);
               const _ovReorder = handleReorder('overview', _OV_DEF);
               const _ovCustom = !!layoutOrder['overview'];
@@ -6077,8 +6077,9 @@ export default function Dashboard() {
                 </div>{/* overview-snapshot */}
                 </DragSection>
 
-                <DragSection id="free-to-spend" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                {/* ── Free to Spend Card ── */}
+                <DragSection id="fts-aom" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 0 }}>
+                {/* ── Free to Spend ── */}
                 {(() => {
                   const now = new Date();
                   let freeToSpend, subtitle;
@@ -6101,7 +6102,7 @@ export default function Dashboard() {
                   const isPositive = freeToSpend >= 0;
                   const color = isPositive ? GREEN : RED;
                   return (
-                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
+                    <div className="lc" style={{ ...CARD, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
@@ -6118,11 +6119,7 @@ export default function Dashboard() {
                     </div>
                   );
                 })()}
-
-                </DragSection>
-
-                <DragSection id="age-of-money" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                {/* ── Age of Money Card ── */}
+                {/* ── Age of Money ── */}
                 {(() => {
                   const now = new Date();
                   let ageOfMoney, subtitle;
@@ -6144,7 +6141,7 @@ export default function Dashboard() {
                   const barPct = ageOfMoney !== null ? Math.min((ageOfMoney / 60) * 100, 100) : 0;
                   const targetPct = (TARGET / 60) * 100;
                   return (
-                    <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                    <div className="lc" style={CARD}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                         <div>
                           <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>Age of Money</div>
@@ -6167,7 +6164,7 @@ export default function Dashboard() {
                     </div>
                   );
                 })()}
-
+                </div>
                 </DragSection>
 
                 <DragSection id="savings-rate" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
@@ -6202,18 +6199,23 @@ export default function Dashboard() {
                           Demo data. Connect an account to see your real savings rate.
                         </div>
                       )}
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        {[
-                          { label: 'Rate',     value: rate !== null ? `${rate}%` : '—',                                              color: rateColor,              big: true },
-                          { label: 'Income',   value: fmt(monthIncome),                                                               color: GREEN                         },
-                          { label: 'Spending', value: fmt(monthSpending),                                                             color: RED                           },
-                          { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`,                          color: saved >= 0 ? GREEN : RED      },
-                        ].map(({ label, value, color, big }) => (
-                          <div key={label}>
-                            <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>{label}</div>
-                            <div style={{ fontSize: big ? 28 : 18, fontWeight: 700, color, letterSpacing: big ? '-1px' : 'normal' }}>{value}</div>
-                          </div>
-                        ))}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 16 }}>
+                        <div style={{ flexShrink: 0 }}>
+                          <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Rate</div>
+                          <div style={{ fontSize: 38, fontWeight: 800, color: rateColor, letterSpacing: '-2px', lineHeight: 1 }}>{rate !== null ? `${rate}%` : '—'}</div>
+                        </div>
+                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, paddingTop: 2 }}>
+                          {[
+                            { label: 'Income',   value: fmt(monthIncome),                                              color: GREEN },
+                            { label: 'Spending', value: fmt(monthSpending),                                            color: RED   },
+                            { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`,         color: saved >= 0 ? GREEN : RED },
+                          ].map(({ label, value, color }) => (
+                            <div key={label}>
+                              <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{label}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                       <div style={{ background: MUTED, borderRadius: 4, height: 6, overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(Math.max(rate ?? 0, 0), 100)}%`, height: '100%', background: rateColor, borderRadius: 4, transition: 'width 0.6s ease' }} />
@@ -6253,6 +6255,86 @@ export default function Dashboard() {
                           </div>
                         );
                       })()}
+                    </div>
+                  );
+                })()}
+                </DragSection>
+
+                <DragSection id="health-score" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                {(() => {
+                  const _now = new Date();
+                  const _ms = new Date(_now.getFullYear(), _now.getMonth(), 1);
+                  let srScore, efScore, dtiScore, aomScore;
+                  const dims = [];
+                  if (isDemoData) {
+                    srScore  = 22; // 25% savings rate
+                    efScore  = 17; // 2.1mo emergency fund (70% of 3mo)
+                    dtiScore = 19; // moderate debt
+                    aomScore = 17; // 21-day age of money
+                  } else {
+                    const _mt = transactions.filter(t => { const d = new Date(t.date); return d >= _ms && d <= _now; });
+                    const mInc  = _mt.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+                    const mSpnd = _mt.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+                    const mRate = mInc > 0 ? (mInc - mSpnd) / mInc * 100 : null;
+                    srScore = mRate === null ? 0 : Math.min(25, Math.max(0, (mRate / 20) * 25));
+
+                    const totalCash = accounts.filter(a => a.type === 'depository').reduce((s, a) => s + (a.balances?.current || 0), 0);
+                    const daysEl = _now.getDate() || 1;
+                    const avgDailySpend = mSpnd / daysEl;
+                    const efMonths = avgDailySpend > 0 ? (totalCash / (avgDailySpend * 30)) : (totalCash > 0 ? 6 : 0);
+                    efScore = Math.min(25, (efMonths / 3) * 25);
+
+                    const totalDebt = [
+                      ...(liabilities.credit || []),
+                      ...(liabilities.student || []),
+                      ...(liabilities.mortgage || []),
+                      ...(liabilities.car || []),
+                    ].reduce((s, l) => s + (l.balances?.current || l.balance || 0), 0);
+                    const annualIncome = mInc * 12;
+                    const dti = annualIncome > 0 ? totalDebt / annualIncome : (totalDebt > 0 ? 3 : 0);
+                    dtiScore = Math.max(0, 25 * (1 - Math.min(dti / 3, 1)));
+
+                    const aom = avgDailySpend > 0 ? totalCash / avgDailySpend : 0;
+                    aomScore = Math.min(25, (aom / 30) * 25);
+                  }
+                  const total = Math.round(srScore + efScore + dtiScore + aomScore);
+                  const scoreColor = total >= 75 ? GREEN : total >= 55 ? YELLOW : total >= 35 ? '#f97316' : RED;
+                  const scoreLabel = total >= 75 ? 'Excellent' : total >= 55 ? 'Good' : total >= 35 ? 'Fair' : 'Needs Work';
+                  dims.push(
+                    { label: 'Savings Rate',    score: srScore,  max: 25, desc: 'How much of income you save monthly' },
+                    { label: 'Emergency Fund',  score: efScore,  max: 25, desc: '3-month expense cushion target' },
+                    { label: 'Debt Load',       score: dtiScore, max: 25, desc: 'Total debt vs annual income' },
+                    { label: 'Age of Money',    score: aomScore, max: 25, desc: 'Days your cash covers at current spend' },
+                  );
+                  return (
+                    <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Financial Health Score</div>
+                          {isDemoData && <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '3px 10px', display: 'inline-block', marginTop: 4 }}>Demo</div>}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 38, fontWeight: 800, color: scoreColor, letterSpacing: '-2px', lineHeight: 1 }}>{total}</div>
+                          <div style={{ fontSize: 11, color: scoreColor, fontWeight: 700, marginTop: 2 }}>{scoreLabel}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {dims.map(d => {
+                          const pct = (d.score / d.max) * 100;
+                          const c = pct >= 80 ? GREEN : pct >= 55 ? YELLOW : pct >= 30 ? '#f97316' : RED;
+                          return (
+                            <div key={d.label}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, color: TEXT2, fontWeight: 500 }}>{d.label}</span>
+                                <span style={{ fontSize: 11, color: c, fontWeight: 700 }}>{Math.round(d.score)}/{d.max}</span>
+                              </div>
+                              <div style={{ height: 5, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 3, transition: 'width 0.6s ease' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })()}
@@ -7432,6 +7514,28 @@ export default function Dashboard() {
                           Demo data. Connect accounts to see your real finances.
                         </div>
                       )}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                        <button onClick={() => {
+                          const rows = [['Date', 'Description', 'Category', 'Amount', 'Type']];
+                          transactions.forEach(t => {
+                            rows.push([
+                              t.date,
+                              t.merchant_name || t.name || '',
+                              fmtCat(resolveCategory(t)),
+                              Math.abs(t.amount).toFixed(2),
+                              t.amount > 0 ? 'Expense' : 'Income',
+                            ]);
+                          });
+                          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+                          const blob = new Blob([csv], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url; a.download = `peakledger-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+                          URL.revokeObjectURL(url);
+                        }} style={{ padding: '6px 14px', background: DARK, border: BORDER, borderRadius: 8, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Download CSV
+                        </button>
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 24 }}>
                         {[
                           { label: 'This Month',   value: fmt(thisM.total),  color: GREEN },
@@ -7464,6 +7568,73 @@ export default function Dashboard() {
                           })}
                         </div>
                       </div>
+
+                      {(() => {
+                        // Savings rate trend and income consistency
+                        const expByMonth = [];
+                        for (let i = 5; i >= 0; i--) {
+                          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                          const start = new Date(d.getFullYear(), d.getMonth(), 1);
+                          const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+                          const txns = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0; });
+                          expByMonth.push(txns.reduce((s, t) => s + t.amount, 0));
+                        }
+                        const MOCK_EXP = [1180, 1540, 980, 1320, 1110, 1500];
+                        const effectiveExp = useReal ? expByMonth : MOCK_EXP;
+                        const rateByMonth = months.map((m, i) => {
+                          const inc = m.total; const exp = effectiveExp[i];
+                          return inc > 0 ? Math.round((inc - exp) / inc * 100) : null;
+                        });
+                        const validInc = months.map(m => m.total).filter(v => v > 50);
+                        const avgInc = validInc.length > 0 ? validInc.reduce((s, v) => s + v, 0) / validInc.length : 0;
+                        const minInc = validInc.length > 0 ? Math.min(...validInc) : 0;
+                        const maxInc = validInc.length > 0 ? Math.max(...validInc) : 0;
+                        const stdDev = validInc.length > 1 ? Math.sqrt(validInc.map(v => (v - avgInc) ** 2).reduce((s, v) => s + v, 0) / validInc.length) : 0;
+                        const cv = avgInc > 0 ? (stdDev / avgInc) * 100 : 0;
+                        const consLabel = cv < 8 ? 'Very Consistent' : cv < 18 ? 'Consistent' : cv < 32 ? 'Variable' : 'Highly Variable';
+                        const consColor = cv < 8 ? GREEN : cv < 18 ? GREEN : cv < 32 ? YELLOW : RED;
+                        const maxRate = Math.max(...rateByMonth.filter(r => r !== null).map(Math.abs), 1);
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                            <div style={CARD}>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Savings Rate Trend</div>
+                              <div style={{ fontSize: 11, color: TEXT3, marginBottom: 14 }}>Month-by-month savings rate</div>
+                              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
+                                {months.map((m, i) => {
+                                  const r = rateByMonth[i];
+                                  const isPos = r !== null && r >= 0;
+                                  const barH = r !== null ? Math.max(4, (Math.abs(r) / maxRate) * 70) : 4;
+                                  const c = r === null ? TEXT3 : r >= 20 ? GREEN : r >= 10 ? YELLOW : r >= 0 ? TEXT : RED;
+                                  return (
+                                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                      <div style={{ fontSize: 10, color: c, fontWeight: 700 }}>{r !== null ? `${r}%` : '—'}</div>
+                                      <div style={{ width: '100%', height: barH, background: r !== null ? c : MUTED, borderRadius: '3px 3px 0 0', opacity: isPos ? 0.85 : 0.5 }} />
+                                      <div style={{ fontSize: 10, color: TEXT3 }}>{m.label}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div style={CARD}>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Income Consistency</div>
+                              <div style={{ fontSize: 11, color: TEXT3, marginBottom: 14 }}>Based on last 6 months</div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <span style={{ fontSize: 22, fontWeight: 800, color: consColor }}>{consLabel}</span>
+                              </div>
+                              {[
+                                { label: 'Monthly Average', value: fmt(Math.round(avgInc)) },
+                                { label: 'Best Month',      value: fmt(Math.round(maxInc)), color: GREEN },
+                                { label: 'Lean Month',      value: fmt(Math.round(minInc)), color: minInc < avgInc * 0.75 ? RED : TEXT },
+                              ].map(({ label, value, color }) => (
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                  <span style={{ fontSize: 12, color: TEXT2 }}>{label}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: color || TEXT }}>{value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <div style={CARD}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

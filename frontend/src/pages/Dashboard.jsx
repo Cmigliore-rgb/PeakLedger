@@ -5925,7 +5925,7 @@ export default function Dashboard() {
               const _h = new Date().getHours();
               const _g = _h < 12 ? 'Good morning' : _h < 17 ? 'Good afternoon' : 'Good evening';
               const _n = user?.name?.split(' ')[0] || 'there';
-              const _OV_DEF = ['stats', 'fts-aom', 'savings-rate', 'health-score', 'chart', 'health', 'goals', 'txns', 'calendar'];
+              const _OV_DEF = ['stats', 'free-to-spend', 'savings-rate', 'chart', 'health', 'goals', 'txns', 'calendar'];
               const _ovOrder = getOrder('overview', _OV_DEF);
               const _ovReorder = handleReorder('overview', _OV_DEF);
               const _ovCustom = !!layoutOrder['overview'];
@@ -6077,9 +6077,7 @@ export default function Dashboard() {
                 </div>{/* overview-snapshot */}
                 </DragSection>
 
-                <DragSection id="fts-aom" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 0 }}>
-                {/* ── Free to Spend ── */}
+                <DragSection id="free-to-spend" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 {(() => {
                   const now = new Date();
                   let freeToSpend, subtitle;
@@ -6102,7 +6100,7 @@ export default function Dashboard() {
                   const isPositive = freeToSpend >= 0;
                   const color = isPositive ? GREEN : RED;
                   return (
-                    <div className="lc" style={{ ...CARD, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
+                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
@@ -6119,52 +6117,6 @@ export default function Dashboard() {
                     </div>
                   );
                 })()}
-                {/* ── Age of Money ── */}
-                {(() => {
-                  const now = new Date();
-                  let ageOfMoney, subtitle;
-                  if (isDemoData) {
-                    ageOfMoney = 21;
-                    subtitle = 'Days your cash covers at this spending pace';
-                  } else {
-                    const totalCash = accounts.filter(a => a.type === 'depository').reduce((s, a) => s + (a.balances?.current || 0), 0);
-                    const daysElapsed = now.getDate() || 1;
-                    const avgDailySpend = activeMonthlySpend / daysElapsed;
-                    ageOfMoney = avgDailySpend > 0 ? Math.round(totalCash / avgDailySpend) : null;
-                    subtitle = totalCash > 0 && avgDailySpend > 0
-                      ? `${fmt(totalCash)} cash / ${fmt(Math.round(avgDailySpend * 100) / 100)}/day avg spend`
-                      : 'Connect accounts to see your age of money';
-                  }
-                  const color = ageOfMoney === null ? TEXT2 : ageOfMoney >= 30 ? GREEN : ageOfMoney >= 14 ? YELLOW : RED;
-                  const label = ageOfMoney === null ? 'No data' : ageOfMoney >= 30 ? 'Healthy buffer' : ageOfMoney >= 14 ? 'Moderate' : 'Low buffer';
-                  const TARGET = 30;
-                  const barPct = ageOfMoney !== null ? Math.min((ageOfMoney / 60) * 100, 100) : 0;
-                  const targetPct = (TARGET / 60) * 100;
-                  return (
-                    <div className="lc" style={CARD}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                        <div>
-                          <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>Age of Money</div>
-                          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
-                            {ageOfMoney !== null ? `${ageOfMoney}d` : '—'}
-                          </div>
-                          <div style={{ fontSize: 12, color: TEXT2 }}>{subtitle}</div>
-                        </div>
-                        <div style={{ fontSize: 11, color, textAlign: 'right', fontWeight: 700 }}>{label}</div>
-                      </div>
-                      <div style={{ position: 'relative', height: 6, background: MUTED, borderRadius: 3, overflow: 'visible', marginBottom: 6 }}>
-                        <div style={{ height: '100%', width: `${barPct}%`, background: color, borderRadius: 3, transition: 'width 0.6s ease' }} />
-                        <div style={{ position: 'absolute', left: `${targetPct}%`, top: -3, width: 2, height: 12, background: TEXT3, borderRadius: 1 }} title="30-day target" />
-                      </div>
-                      <div style={{ position: 'relative', fontSize: 11, color: TEXT3, height: 16 }}>
-                        <span style={{ position: 'absolute', left: 0 }}>0d</span>
-                        <span style={{ position: 'absolute', left: `${targetPct}%`, transform: 'translateX(-50%)', color: ageOfMoney !== null && ageOfMoney >= TARGET ? GREEN : TEXT3 }}>30d target</span>
-                        <span style={{ position: 'absolute', right: 0 }}>60d</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-                </div>
                 </DragSection>
 
                 <DragSection id="savings-rate" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
@@ -6260,86 +6212,6 @@ export default function Dashboard() {
                 })()}
                 </DragSection>
 
-                <DragSection id="health-score" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                {(() => {
-                  const _now = new Date();
-                  const _ms = new Date(_now.getFullYear(), _now.getMonth(), 1);
-                  let srScore, efScore, dtiScore, aomScore;
-                  const dims = [];
-                  if (isDemoData) {
-                    srScore  = 22; // 25% savings rate
-                    efScore  = 17; // 2.1mo emergency fund (70% of 3mo)
-                    dtiScore = 19; // moderate debt
-                    aomScore = 17; // 21-day age of money
-                  } else {
-                    const _mt = transactions.filter(t => { const d = new Date(t.date); return d >= _ms && d <= _now; });
-                    const mInc  = _mt.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-                    const mSpnd = _mt.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-                    const mRate = mInc > 0 ? (mInc - mSpnd) / mInc * 100 : null;
-                    srScore = mRate === null ? 0 : Math.min(25, Math.max(0, (mRate / 20) * 25));
-
-                    const totalCash = accounts.filter(a => a.type === 'depository').reduce((s, a) => s + (a.balances?.current || 0), 0);
-                    const daysEl = _now.getDate() || 1;
-                    const avgDailySpend = mSpnd / daysEl;
-                    const efMonths = avgDailySpend > 0 ? (totalCash / (avgDailySpend * 30)) : (totalCash > 0 ? 6 : 0);
-                    efScore = Math.min(25, (efMonths / 3) * 25);
-
-                    const totalDebt = [
-                      ...(liabilities.credit || []),
-                      ...(liabilities.student || []),
-                      ...(liabilities.mortgage || []),
-                      ...(liabilities.car || []),
-                    ].reduce((s, l) => s + (l.balances?.current || l.balance || 0), 0);
-                    const annualIncome = mInc * 12;
-                    const dti = annualIncome > 0 ? totalDebt / annualIncome : (totalDebt > 0 ? 3 : 0);
-                    dtiScore = Math.max(0, 25 * (1 - Math.min(dti / 3, 1)));
-
-                    const aom = avgDailySpend > 0 ? totalCash / avgDailySpend : 0;
-                    aomScore = Math.min(25, (aom / 30) * 25);
-                  }
-                  const total = Math.round(srScore + efScore + dtiScore + aomScore);
-                  const scoreColor = total >= 75 ? GREEN : total >= 55 ? YELLOW : total >= 35 ? '#f97316' : RED;
-                  const scoreLabel = total >= 75 ? 'Excellent' : total >= 55 ? 'Good' : total >= 35 ? 'Fair' : 'Needs Work';
-                  dims.push(
-                    { label: 'Savings Rate',    score: srScore,  max: 25, desc: 'How much of income you save monthly' },
-                    { label: 'Emergency Fund',  score: efScore,  max: 25, desc: '3-month expense cushion target' },
-                    { label: 'Debt Load',       score: dtiScore, max: 25, desc: 'Total debt vs annual income' },
-                    { label: 'Age of Money',    score: aomScore, max: 25, desc: 'Days your cash covers at current spend' },
-                  );
-                  return (
-                    <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Financial Health Score</div>
-                          {isDemoData && <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '3px 10px', display: 'inline-block', marginTop: 4 }}>Demo</div>}
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 38, fontWeight: 800, color: scoreColor, letterSpacing: '-2px', lineHeight: 1 }}>{total}</div>
-                          <div style={{ fontSize: 11, color: scoreColor, fontWeight: 700, marginTop: 2 }}>{scoreLabel}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {dims.map(d => {
-                          const pct = (d.score / d.max) * 100;
-                          const c = pct >= 80 ? GREEN : pct >= 55 ? YELLOW : pct >= 30 ? '#f97316' : RED;
-                          return (
-                            <div key={d.label}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <span style={{ fontSize: 12, color: TEXT2, fontWeight: 500 }}>{d.label}</span>
-                                <span style={{ fontSize: 11, color: c, fontWeight: 700 }}>{Math.round(d.score)}/{d.max}</span>
-                              </div>
-                              <div style={{ height: 5, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 3, transition: 'width 0.6s ease' }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-                </DragSection>
-
                 <DragSection id="chart" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div data-tour="overview-networth-chart" style={{ ...CARD, marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -6392,28 +6264,40 @@ export default function Dashboard() {
                           refreshing={baselineRefreshing}
                           isDemo={!!display.isDemo}
                         />
-                        {(() => {
-                          const allLiab = [
-                            ...(liabilities.credit   || []),
-                            ...(liabilities.student  || []),
-                            ...(liabilities.mortgage || []),
-                          ];
-                          const totalMinPmt = allLiab.reduce((s, l) => s + (l.minimum_payment_amount || 0), 0);
-                          if (totalMinPmt === 0) return null;
-                          const avgNet = display.baseline?.avgMonthlyNet ?? 0;
-                          const effectiveNet = avgNet - totalMinPmt;
+                        {display.currentMTD && (() => {
+                          const { projectedNet, baseline, pctOfMonth } = display.currentMTD;
+                          const gap = Math.abs(projectedNet - baseline);
+                          const isRed  = display.status === 'red';
+                          const isWarn = display.status === 'warning';
+                          const isGood = display.status === 'good';
+                          const color  = isRed ? RED : isWarn ? YELLOW : GREEN;
+                          let headline, body, cta, ctaAction;
+                          if (isRed) {
+                            headline = `Spending is running above your baseline`;
+                            body = `You're ${pctOfMonth}% through the month. At this pace your net will be ${fmt(projectedNet)}, about ${fmt(gap)} below your typical ${fmt(baseline)}. Check Expenses to see what categories are over.`;
+                            cta = 'Review Expenses';
+                            ctaAction = () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); };
+                          } else if (isWarn) {
+                            headline = `You're tracking slightly below your baseline`;
+                            body = `Projected net of ${fmt(projectedNet)} vs your typical ${fmt(baseline)} — ${fmt(gap)} gap with ${100 - pctOfMonth}% of the month left. Small adjustments now can close it.`;
+                            cta = 'Check Expenses';
+                            ctaAction = () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); };
+                          } else {
+                            headline = `You're on track this month`;
+                            body = `Projected net of ${fmt(projectedNet)}, about ${fmt(gap)} ahead of your typical ${fmt(baseline)}. Consider putting the extra toward a goal.`;
+                            cta = 'See Goals';
+                            ctaAction = () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('goals'); };
+                          }
                           return (
-                            <div style={{ marginTop: 16, paddingTop: 16, borderTop: BORDER, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <div style={{ fontSize: 11, color: TEXT2, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Fixed Debt Obligations</div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span style={{ color: TEXT2 }}>Minimum monthly payments</span>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>−{fmt(totalMinPmt)}</span>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingTop: 6, borderTop: `1px solid ${MUTED}` }}>
-                                <span style={{ color: TEXT2 }}>Effective monthly net</span>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: effectiveNet >= 0 ? GREEN : RED }}>
-                                  {effectiveNet >= 0 ? '+' : ''}{fmt(effectiveNet)}
-                                </span>
+                            <div style={{ marginTop: 16, paddingTop: 16, borderTop: BORDER }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 5 }}>{headline}</div>
+                                  <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.5 }}>{body}</div>
+                                </div>
+                                <button onClick={ctaAction} style={{ flexShrink: 0, padding: '6px 14px', background: 'transparent', border: `1px solid ${color}50`, borderRadius: 8, color, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                  {cta} →
+                                </button>
                               </div>
                             </div>
                           );
@@ -7514,28 +7398,6 @@ export default function Dashboard() {
                           Demo data. Connect accounts to see your real finances.
                         </div>
                       )}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                        <button onClick={() => {
-                          const rows = [['Date', 'Description', 'Category', 'Amount', 'Type']];
-                          transactions.forEach(t => {
-                            rows.push([
-                              t.date,
-                              t.merchant_name || t.name || '',
-                              fmtCat(resolveCategory(t)),
-                              Math.abs(t.amount).toFixed(2),
-                              t.amount > 0 ? 'Expense' : 'Income',
-                            ]);
-                          });
-                          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-                          const blob = new Blob([csv], { type: 'text/csv' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url; a.download = `peakledger-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-                          URL.revokeObjectURL(url);
-                        }} style={{ padding: '6px 14px', background: DARK, border: BORDER, borderRadius: 8, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                          Download CSV
-                        </button>
-                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 24 }}>
                         {[
                           { label: 'This Month',   value: fmt(thisM.total),  color: GREEN },

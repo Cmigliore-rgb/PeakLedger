@@ -26,4 +26,19 @@ router.post('/limits', requireAuth, (req, res) => {
   res.json({ limits: Object.fromEntries(rows.map(r => [r.category, r.amount])) });
 });
 
+router.put('/limits', requireAuth, (req, res) => {
+  const updates = req.body;
+  if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'body must be an object' });
+  const upsert = db.prepare(`
+    INSERT INTO budget_limits (user_id, category, amount) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, category) DO UPDATE SET amount = excluded.amount
+  `);
+  const doAll = db.transaction(entries => {
+    entries.forEach(([cat, amt]) => upsert.run(req.user.id, cat, parseFloat(amt)));
+  });
+  doAll(Object.entries(updates).filter(([, v]) => parseFloat(v) > 0));
+  const rows = db.prepare('SELECT category, amount FROM budget_limits WHERE user_id = ?').all(req.user.id);
+  res.json({ limits: Object.fromEntries(rows.map(r => [r.category, r.amount])) });
+});
+
 module.exports = router;

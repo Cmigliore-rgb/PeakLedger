@@ -3579,7 +3579,8 @@ export default function Dashboard() {
 
   const effectiveProfessor = isAdmin && viewAs ? viewAs === 'professor' : isProfessor;
   const effectiveStudent   = isAdmin && viewAs ? viewAs === 'student'   : user?.role === 'student';
-  const canSeeAI           = !isDemoData && isPremium;
+  const canSeeAI           = isPremium;
+  const showDemoAI         = isDemoData && !isPremium;
 
   const openTourAt = (stepIndex) => {
     const steps = effectiveProfessor ? PROFESSOR_TOUR_STEPS : effectiveStudent ? STUDENT_TOUR_STEPS : FINANCE_TOUR_STEPS;
@@ -5995,7 +5996,7 @@ export default function Dashboard() {
                 )}
 
                 <AIInsightCard
-                  isDemoData={isDemoData}
+                  isDemoData={showDemoAI}
                   demoKey="overview"
                   onGetAdvice={canSeeAI ? () => getAdvice('overview') : undefined}
                   loading={adviceState.overview?.loading}
@@ -7461,20 +7462,33 @@ export default function Dashboard() {
                             <div style={CARD}>
                               <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Savings Rate Trend</div>
                               <div style={{ fontSize: 11, color: TEXT3, marginBottom: 14 }}>Month-by-month savings rate</div>
-                              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
-                                {months.map((m, i) => {
-                                  const r = rateByMonth[i];
-                                  const isPos = r !== null && r >= 0;
-                                  const barH = r !== null ? Math.max(4, (Math.abs(r) / maxRate) * 70) : 4;
-                                  const c = r === null ? TEXT3 : r >= 20 ? GREEN : r >= 10 ? YELLOW : r >= 0 ? TEXT : RED;
-                                  return (
-                                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                                      <div style={{ fontSize: 10, color: c, fontWeight: 700 }}>{r !== null ? `${r}%` : '—'}</div>
-                                      <div style={{ width: '100%', height: barH, background: r !== null ? c : MUTED, borderRadius: '3px 3px 0 0', opacity: isPos ? 0.85 : 0.5 }} />
-                                      <div style={{ fontSize: 10, color: TEXT3 }}>{m.label}</div>
-                                    </div>
-                                  );
-                                })}
+                              <div style={{ position: 'relative', height: 96 }}>
+                                <div style={{ position: 'absolute', top: 38, left: 0, right: 0, height: 1, background: BORDER_C, zIndex: 0 }} />
+                                <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, height: '100%' }}>
+                                  {months.map((m, i) => {
+                                    const r = rateByMonth[i];
+                                    const c = r === null ? TEXT3 : r >= 20 ? GREEN : r >= 10 ? YELLOW : r >= 0 ? TEXT : RED;
+                                    const barH = r !== null ? Math.max(4, (Math.abs(r) / maxRate) * 34) : 0;
+                                    const isPos = r !== null && r >= 0;
+                                    return (
+                                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                                        {isPos && r !== null && (
+                                          <div style={{ fontSize: 10, color: c, fontWeight: 700, position: 'absolute', top: 38 - barH - 14 }}>{r}%</div>
+                                        )}
+                                        {isPos ? (
+                                          <div style={{ position: 'absolute', bottom: '50%', marginBottom: 1, width: '80%', height: barH, background: c, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+                                        ) : r !== null ? (
+                                          <div style={{ position: 'absolute', top: '40%', marginTop: 1, width: '80%', height: barH, background: c, borderRadius: '0 0 3px 3px', opacity: 0.85 }} />
+                                        ) : null}
+                                        {!isPos && r !== null && (
+                                          <div style={{ fontSize: 10, color: c, fontWeight: 700, position: 'absolute', top: 38 + barH + 2 }}>{r}%</div>
+                                        )}
+                                        <div style={{ fontSize: 10, color: TEXT3, position: 'absolute', bottom: 0 }}>{m.label}</div>
+                                        {r === null && <div style={{ fontSize: 10, color: TEXT3, position: 'absolute', top: 28 }}>—</div>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                             <div style={CARD}>
@@ -7763,6 +7777,63 @@ export default function Dashboard() {
 
                   return (
                     <div data-tour="budget-expenses">
+                      {isDemoData && (
+                        <div style={{ padding: '9px 14px', background: 'rgba(77,163,255,0.06)', border: '1px solid rgba(77,163,255,0.2)', borderRadius: 8, fontSize: 12, color: BLUE, marginBottom: 16, marginTop: 4 }}>
+                          Demo data. Connect accounts to see your real finances.
+                        </div>
+                      )}
+                      <div style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 24, marginTop: 20 }}>
+                        {[
+                          { label: 'Month-to-Date Spend', value: fmt(hasRealExp ? activeMonthlySpend : selExp.total) },
+                          { label: 'Top Category',         value: hasRealExp ? (fmtCat(activeBudget[0]?.category) || '—') : fmtCat((MOCK_EXPENSE_CATS[selExpIdx] || MOCK_EXPENSE_CATS[5])[0]?.category) },
+                          { label: 'Month Change',         value: expPct !== null ? `${expDiff >= 0 ? '+' : ''}${expPct.toFixed(0)}%` : '—', color: expPct !== null ? (expDiff <= 0 ? GREEN : RED) : TEXT2 },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="lc" style={CARD}>
+                            <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</div>
+                            <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8, letterSpacing: '-0.5px', color: color || TEXT }}>{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ ...CARD, marginBottom: 16 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>Monthly Expenses: Last 6 Months</div>
+                        <div style={{ fontSize: 11, color: TEXT3, marginBottom: 16 }}>Click a bar to see breakdown</div>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 140 }}>
+                          {display.map((m, i) => {
+                            const isSel = i === selExpIdx;
+                            return (
+                              <div key={i} onClick={() => setSelectedExpenseMonth(m.monthOffset)}
+                                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                                <div style={{ fontSize: 11, color: isSel ? RED : TEXT2, fontWeight: isSel ? 700 : 500, fontFamily: 'monospace', textAlign: 'center' }}>
+                                  {m.total >= 1000 ? `$${(m.total/1000).toFixed(1)}k` : `$${Math.round(m.total)}`}
+                                </div>
+                                <div style={{ width: '100%', height: `${Math.max(4, (m.total / maxExp) * 100)}px`, background: isSel ? RED : 'rgba(248,113,113,0.3)', borderRadius: '4px 4px 0 0', transition: 'all 0.2s ease', flexShrink: 0, outline: isSel ? `2px solid ${RED}` : 'none' }} />
+                                <div style={{ fontSize: 11, color: isSel ? TEXT : TEXT3, fontWeight: isSel ? 700 : 400 }}>{m.label}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, marginBottom: assignMode && selectedExpenseMonth === 0 ? 12 : 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <AIInsightCard
+                            isDemoData={showDemoAI}
+                            demoKey="budgeting"
+                            onGetAdvice={canSeeAI ? () => getAdvice('budgeting') : undefined}
+                            loading={adviceState.budgeting?.loading}
+                            text={adviceState.budgeting?.text}
+                          />
+                        </div>
+                        {selectedExpenseMonth === 0 && !assignMode && (
+                          <button onClick={() => {
+                            const init = {};
+                            displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
+                            setPendingAlloc(init);
+                            setAssignMode(true);
+                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                            Plan This Month
+                          </button>
+                        )}
+                      </div>
                       {assignMode && selectedExpenseMonth === 0 && (() => {
                         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                         const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
@@ -7808,7 +7879,8 @@ export default function Dashboard() {
                               <button onClick={async () => {
                                 const updates = { ...budgetLimits };
                                 Object.entries(pendingAlloc).forEach(([cat, v]) => { const n = parseFloat(v); if (!isNaN(n) && n > 0) updates[cat] = n; });
-                                try { await api.put('/budget/limits', updates); setBudgetLimits(updates); } catch {}
+                                setBudgetLimits(updates);
+                                try { await api.put('/budget/limits', updates); } catch {}
                                 setAssignMode(false); setPendingAlloc({});
                               }} style={{ padding: '7px 20px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                                 Apply Allocations
@@ -7817,63 +7889,6 @@ export default function Dashboard() {
                           </div>
                         );
                       })()}
-                      {isDemoData && (
-                        <div style={{ padding: '9px 14px', background: 'rgba(77,163,255,0.06)', border: '1px solid rgba(77,163,255,0.2)', borderRadius: 8, fontSize: 12, color: BLUE, marginBottom: 16, marginTop: 4 }}>
-                          Demo data. Connect accounts to see your real finances.
-                        </div>
-                      )}
-                      <div style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 24, marginTop: 20 }}>
-                        {[
-                          { label: 'Month-to-Date Spend', value: fmt(hasRealExp ? activeMonthlySpend : selExp.total) },
-                          { label: 'Top Category',         value: hasRealExp ? (fmtCat(activeBudget[0]?.category) || '—') : fmtCat((MOCK_EXPENSE_CATS[selExpIdx] || MOCK_EXPENSE_CATS[5])[0]?.category) },
-                          { label: 'Month Change',         value: expPct !== null ? `${expDiff >= 0 ? '+' : ''}${expPct.toFixed(0)}%` : '—', color: expPct !== null ? (expDiff <= 0 ? GREEN : RED) : TEXT2 },
-                        ].map(({ label, value, color }) => (
-                          <div key={label} className="lc" style={CARD}>
-                            <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</div>
-                            <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8, letterSpacing: '-0.5px', color: color || TEXT }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ ...CARD, marginBottom: 16 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>Monthly Expenses: Last 6 Months</div>
-                        <div style={{ fontSize: 11, color: TEXT3, marginBottom: 16 }}>Click a bar to see breakdown</div>
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 140 }}>
-                          {display.map((m, i) => {
-                            const isSel = i === selExpIdx;
-                            return (
-                              <div key={i} onClick={() => setSelectedExpenseMonth(m.monthOffset)}
-                                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
-                                <div style={{ fontSize: 11, color: isSel ? RED : TEXT2, fontWeight: isSel ? 700 : 500, fontFamily: 'monospace', textAlign: 'center' }}>
-                                  {m.total >= 1000 ? `$${(m.total/1000).toFixed(1)}k` : `$${Math.round(m.total)}`}
-                                </div>
-                                <div style={{ width: '100%', height: `${Math.max(4, (m.total / maxExp) * 100)}px`, background: isSel ? RED : 'rgba(248,113,113,0.3)', borderRadius: '4px 4px 0 0', transition: 'all 0.2s ease', flexShrink: 0, outline: isSel ? `2px solid ${RED}` : 'none' }} />
-                                <div style={{ fontSize: 11, color: isSel ? TEXT : TEXT3, fontWeight: isSel ? 700 : 400 }}>{m.label}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, marginBottom: 16 }}>
-                        <div style={{ flex: 1 }}>
-                          <AIInsightCard
-                            isDemoData={isDemoData}
-                            demoKey="budgeting"
-                            onGetAdvice={canSeeAI ? () => getAdvice('budgeting') : undefined}
-                            loading={adviceState.budgeting?.loading}
-                            text={adviceState.budgeting?.text}
-                          />
-                        </div>
-                        {selectedExpenseMonth === 0 && !assignMode && (
-                          <button onClick={() => {
-                            const init = {};
-                            displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
-                            setPendingAlloc(init);
-                            setAssignMode(true);
-                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                            Plan This Month
-                          </button>
-                        )}
-                      </div>
                       <div className="lc" style={CARD}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                           <div>
@@ -9458,9 +9473,9 @@ export default function Dashboard() {
                 {SandboxBanner}
                 {activeHoldings.length > 0 && (
                   <AIInsightCard
-                    isDemoData={isDemoData}
-                    demoKey={isDemoData ? 'investments' : null}
-                    onGetAdvice={canSeeAI && !isDemoData ? () => getAdvice('investments') : undefined}
+                    isDemoData={showDemoAI}
+                    demoKey={showDemoAI ? 'investments' : null}
+                    onGetAdvice={canSeeAI ? () => getAdvice('investments') : undefined}
                     loading={adviceState.investments?.loading}
                     text={adviceState.investments?.text}
                   />

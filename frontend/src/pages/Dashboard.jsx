@@ -252,7 +252,7 @@ const TICKER_DOMAIN = {
 
 const NAME_DOMAIN = {
   'chase':'chase.com','bank of america':'bankofamerica.com','wells fargo':'wellsfargo.com',
-  'capital one':'capitalone.com','citibank':'citi.com','citi':'citi.com',
+  'capital one':'capitalone.com','cap1 ':'capitalone.com','capitalone':'capitalone.com','citibank':'citi.com','citi':'citi.com',
   'american express':'americanexpress.com','discover':'discover.com',
   'ally':'ally.com','sofi':'sofi.com','robinhood':'robinhood.com','webull':'webull.com',
   'fidelity':'fidelity.com','vanguard':'vanguard.com','schwab':'schwab.com',
@@ -298,8 +298,12 @@ function logoUrls(name, ticker, logoUrl) {
     return urls;
   }
   const lower = (name || '').toLowerCase();
+  const DIRECT_LOGOS = {
+    'capitalone.com': 'https://logo.clearbit.com/capitalone.com',
+  };
   for (const [k, d] of Object.entries(NAME_DOMAIN)) {
     if (lower.includes(k)) {
+      if (DIRECT_LOGOS[d]) urls.push(DIRECT_LOGOS[d]);
       urls.push(`https://logo.clearbit.com/${d}`);
       urls.push(`https://www.google.com/s2/favicons?domain=${d}&sz=128`);
       return urls;
@@ -4040,19 +4044,21 @@ export default function Dashboard() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target.result;
+      // Unfold RFC 5545 folded lines (CRLF/LF + whitespace = continuation)
+      const text = e.target.result.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
       const blocks = text.split('BEGIN:VEVENT');
       const imported = [];
       for (let i = 1; i < blocks.length; i++) {
         const block = blocks[i];
         const get = (key) => { const m = block.match(new RegExp(`${key}[^:\\r\\n]*:([^\\r\\n]+)`)); return m ? m[1].trim() : ''; };
+        const unescape = (s) => s.replace(/\\n/g, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\').replace(/^"(.*)"$/, '$1');
         const dtraw = get('DTSTART');
-        const summary = get('SUMMARY');
+        const summary = unescape(get('SUMMARY'));
         if (!dtraw || !summary) continue;
         const digits = dtraw.replace(/[^0-9]/g, '').slice(0, 8);
         if (digits.length < 8) continue;
         const date = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-        const desc = get('DESCRIPTION').replace(/\\n/g, ' ').replace(/\\,/g, ',');
+        const desc = unescape(get('DESCRIPTION'));
         imported.push({ id: `ics_${Date.now()}_${i}`, title: summary, date, type: 'reminder', note: desc, _imported: true });
       }
       if (imported.length === 0) { setIcsImportMsg({ ok: false, text: 'No events found in that file.' }); return; }
@@ -4247,11 +4253,19 @@ export default function Dashboard() {
       const slimHoldings = holdings.map(h => ({ name: h.security?.name || h.name, ticker: h.security?.ticker_symbol || h.ticker_symbol, quantity: h.quantity, price: h.institution_price, value: (h.quantity || 0) * (h.institution_price || 0) }));
       const placeholder = { role: 'assistant', content: '' };
       setChatMessages([...newHistory, placeholder]);
+      let streamBuf = '';
+      let rafId = null;
+      const flushBuf = () => {
+        if (!streamBuf) return;
+        const chunk = streamBuf; streamBuf = '';
+        setChatMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: (next[next.length - 1].content || '') + chunk }; return next; });
+        rafId = null;
+      };
       await streamChat(
         { message: text, history: chatMessages.map(m => ({ role: m.role, content: m.content })), context: { accounts: slimAccounts, transactions: slimTxns, holdings: slimHoldings, budget: budgetMap } },
-        delta => setChatMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: (next[next.length - 1].content || '') + delta }; return next; }),
-        () => setChatLoading(false),
-        () => { setChatMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: 'Sorry, couldn\'t get a response. Check GROQ_API_KEY in backend .env.' }; return next; }); setChatLoading(false); },
+        delta => { streamBuf += delta; if (!rafId) rafId = requestAnimationFrame(flushBuf); },
+        () => { flushBuf(); setChatLoading(false); },
+        () => { flushBuf(); setChatMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: 'Sorry, couldn\'t get a response. Check GROQ_API_KEY in backend .env.' }; return next; }); setChatLoading(false); },
       );
     } catch {
       setChatMessages([...newHistory, { role: 'assistant', content: 'Sorry, couldn\'t get a response. Check GROQ_API_KEY in backend .env.' }]);
@@ -7527,26 +7541,27 @@ export default function Dashboard() {
                               <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Savings Rate Trend</div>
                               <div style={{ fontSize: 11, color: TEXT3, marginBottom: 14 }}>Month-by-month savings rate</div>
                               <div>
-                                <div style={{ position: 'relative', height: 88 }}>
-                                  <div style={{ position: 'absolute', top: 44, left: 0, right: 0, height: 1, background: BORDER_C }} />
+                                <div style={{ position: 'relative', height: 100 }}>
+                                  <div style={{ position: 'absolute', top: 46, left: 0, right: 0, height: 1, background: BORDER_C }} />
                                   <div style={{ display: 'flex', height: '100%', gap: 6 }}>
                                     {months.map((m, i) => {
                                       const r = rateByMonth[i];
                                       const c = r === null ? TEXT3 : r >= 20 ? GREEN : r >= 10 ? YELLOW : r >= 0 ? GREEN : RED;
-                                      const barH = r !== null ? Math.max(4, (Math.abs(r) / maxRate) * 34) : 0;
+                                      const scaleMax = Math.min(maxRate, 100);
+                                      const barH = r !== null ? Math.max(4, (Math.min(Math.abs(r), scaleMax) / scaleMax) * 38) : 0;
                                       const isPos = r !== null && r >= 0;
                                       return (
                                         <div key={i} style={{ flex: 1, position: 'relative' }}>
                                           {isPos && r !== null && (
-                                            <div style={{ position: 'absolute', top: Math.max(2, 44 - barH - 13), left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
+                                            <div style={{ position: 'absolute', top: Math.max(1, 46 - barH - 13), left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
                                           )}
                                           {r !== null && (
-                                            <div style={{ position: 'absolute', left: '10%', right: '10%', height: barH, background: c, borderRadius: isPos ? '3px 3px 0 0' : '0 0 3px 3px', opacity: 0.85, ...(isPos ? { top: 44 - barH } : { top: 45 }) }} />
+                                            <div style={{ position: 'absolute', left: '10%', right: '10%', height: barH, background: c, borderRadius: isPos ? '3px 3px 0 0' : '0 0 3px 3px', opacity: 0.85, ...(isPos ? { top: 46 - barH } : { top: 47 }) }} />
                                           )}
                                           {!isPos && r !== null && (
-                                            <div style={{ position: 'absolute', top: Math.min(46 + barH, 75), left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
+                                            <div style={{ position: 'absolute', top: 48 + barH, left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
                                           )}
-                                          {r === null && <div style={{ position: 'absolute', top: 40, left: 0, right: 0, fontSize: 10, color: TEXT3, textAlign: 'center' }}>—</div>}
+                                          {r === null && <div style={{ position: 'absolute', top: 42, left: 0, right: 0, fontSize: 10, color: TEXT3, textAlign: 'center' }}>—</div>}
                                         </div>
                                       );
                                     })}
@@ -7881,27 +7896,27 @@ export default function Dashboard() {
                           })}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 12, marginBottom: assignMode && selectedExpenseMonth === 0 ? 12 : 16 }}>
-                        <div style={{ flex: 1 }}>
-                          <AIInsightCard
-                            isDemoData={showDemoAI}
-                            demoKey="budgeting"
-                            onGetAdvice={canSeeAI ? () => getAdvice('budgeting') : undefined}
-                            loading={adviceState.budgeting?.loading}
-                            text={adviceState.budgeting?.text}
-                          />
-                        </div>
-                        {selectedExpenseMonth === 0 && !assignMode && (
+                      <div style={{ marginTop: 12 }}>
+                        <AIInsightCard
+                          isDemoData={showDemoAI}
+                          demoKey="budgeting"
+                          onGetAdvice={canSeeAI ? () => getAdvice('budgeting') : undefined}
+                          loading={adviceState.budgeting?.loading}
+                          text={adviceState.budgeting?.text}
+                        />
+                      </div>
+                      {selectedExpenseMonth === 0 && !assignMode && (
+                        <div style={{ marginTop: 8, marginBottom: 16 }}>
                           <button onClick={() => {
                             const init = {};
                             displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
                             setPendingAlloc(init);
                             setAssignMode(true);
-                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                             Plan This Month
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                       {assignMode && selectedExpenseMonth === 0 && (() => {
                         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                         const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });

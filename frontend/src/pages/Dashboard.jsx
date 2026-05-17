@@ -1937,9 +1937,12 @@ const FINANCE_TOUR_STEPS = [
   { sel: '[data-tour="sidebar-nav"]',              panel: 'overview',                              side: 'right',
     title: 'Your Navigation',
     body: 'The sidebar is your navigation hub. Each section in Personal Finance has its own panel: Overview, Cash Flow, Investments, Market Insights, Learn, and Settings. Click any item to switch views. The Get Premium button connects your real accounts. Take a Tour restarts this guide from wherever you are.' },
-  { sel: '[data-tour="overview-cards"]',            panel: 'overview',   selBottom: '[data-tour="overview-savings-rate"]', side: 'bottom',  extraSels: _OV,
+  { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Your Financial Snapshot',
-    body: 'The top row shows net worth, total cash, and portfolio value. Below that is your Monthly Savings Rate card, which tracks what percentage of your income you kept this month against the 20% target. These numbers update in real time once your accounts are connected.' },
+    body: 'The top row shows your net worth (assets minus liabilities), total cash across all accounts, and total portfolio value. These three numbers are the foundation of your financial picture and update in real time once your accounts are connected.' },
+  { sel: '[data-tour="overview-savings-rate"]',    panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Monthly Savings Rate',
+    body: 'This card tracks what percentage of your income you kept this month, measured against the 20% target. The bar fills green when you hit the target and shows spending pace context so you can see at a glance whether your month is trending well or running tight.' },
   { sel: '[data-tour="overview-networth-chart"]',  panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Net Worth History',
     body: 'This chart tracks your net worth month over month, showing assets minus liabilities over time. Watching the line trend upward consistently is one of the clearest signals that your finances are moving in the right direction.' },
@@ -2003,9 +2006,12 @@ const STUDENT_TOUR_STEPS = [
   { sel: '[data-tour="sidebar-nav"]',              panel: 'overview',                              side: 'right',
     title: 'The Overview Tab',
     body: 'The sidebar is your navigation hub. Personal Finance covers accounts, spending, investments, and market data. Education is where your course modules, datasets, and assignments live. The Get Premium button at the bottom connects your real accounts at the discounted student rate.' },
-  { sel: '[data-tour="overview-cards"]',            panel: 'overview',   selBottom: '[data-tour="overview-savings-rate"]', side: 'bottom',  extraSels: _OV,
+  { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Your Financial Snapshot',
-    body: 'The top row shows net worth, total cash, and portfolio value. Below that is your Monthly Savings Rate, which tracks how much of your income you kept this month against the 20% target. Net worth (assets minus liabilities) is the foundational number in personal finance and the one most tied to long-term wealth.' },
+    body: 'The top row shows net worth (assets minus liabilities), total cash across all accounts, and total portfolio value. Net worth is the foundational number in personal finance and the one most tied to long-term wealth building.' },
+  { sel: '[data-tour="overview-savings-rate"]',    panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Monthly Savings Rate',
+    body: 'The savings rate card tracks what percentage of income was kept this month against the 20% benchmark. The 20% rule comes from the 50/30/20 framework: 50% needs, 30% wants, 20% savings. Students can use this card to practice building the savings habit before their income grows.' },
   { sel: '[data-tour="overview-networth-chart"]',  panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Net Worth History',
     body: 'This chart tracks your net worth month over month. Even small positive trends compound significantly over time. If it is trending up, your financial habits are working. If it is flat or declining, something in your cash flow needs attention.' },
@@ -2069,9 +2075,12 @@ const PROFESSOR_TOUR_STEPS = [
   { sel: '[data-tour="sidebar-nav"]',              panel: 'overview',                              side: 'right',
     title: 'The Overview Tab',
     body: 'The sidebar is the student\'s navigation hub. Personal Finance covers accounts, spending, investments, and market data. Education is where course modules, datasets, and assignments live. The Get Premium button connects real accounts at the student rate. In demo mode every section is pre-populated with realistic synthetic data so students can complete all work without linking personal accounts.' },
-  { sel: '[data-tour="overview-cards"]',            panel: 'overview',   selBottom: '[data-tour="overview-savings-rate"]', side: 'bottom',  extraSels: _OV,
+  { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Financial Snapshot',
-    body: 'The top row shows net worth, total cash, and portfolio value. Below that is the Monthly Savings Rate card, which tracks what percentage of income was kept this month against a 20% target. Students with linked accounts see their real numbers; demo mode shows a realistic sample.' },
+    body: 'The top row shows net worth (assets minus liabilities), total cash, and total portfolio value. These are the three numbers that define the balance sheet: what you own, what you owe, and the difference. Students with linked accounts see real numbers; demo mode shows a realistic sample.' },
+  { sel: '[data-tour="overview-savings-rate"]',    panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Monthly Savings Rate',
+    body: 'This card shows what percentage of income was kept this month against a 20% target based on the 50/30/20 rule. Tracking savings rate is one of the most practical habits students can build early: even a small consistent rate invested over time has a large compounding effect.' },
   { sel: '[data-tour="overview-networth-chart"]',  panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Net Worth History',
     body: 'This chart tracks net worth month over month, plotting assets minus liabilities over time. It makes the abstract concept of balance sheet growth concrete and observable. Students with linked accounts see their real trajectory; demo mode shows a realistic sample.' },
@@ -2128,6 +2137,52 @@ const PROFESSOR_TOUR_STEPS = [
     body: 'Students use Settings to control panel visibility, switch themes, and manage their subscription. Your Professor Hub, accessible from the sidebar, is separate: it is where you manage course codes, student rosters, assignments, and grading.' },
 ];
 
+const OV_SECTION_TOUR = {
+  'stats':        '[data-tour="overview-cards"]',
+  'savings-rate': '[data-tour="overview-savings-rate"]',
+  'chart':        '[data-tour="overview-networth-chart"]',
+  'txns':         '[data-tour="overview-txns"]',
+  'calendar':     '[data-tour="overview-calendar"]',
+};
+const BASELINE_TOUR_SEL = '[data-tour="overview-baseline"]';
+
+function buildSortedSteps(base, ovOrder, cfOrder, inOrder) {
+  const ovSels = new Set(Object.values(OV_SECTION_TOUR));
+  const ovSelToSec = Object.fromEntries(Object.entries(OV_SECTION_TOUR).map(([k, v]) => [v, k]));
+  const ovStepsBySec = {};
+  let baselineStep = null;
+  const cfStepsByTab = {}, inStepsByTab = {};
+  base.forEach(s => {
+    if (ovSels.has(s.sel)) ovStepsBySec[ovSelToSec[s.sel]] = s;
+    if (s.sel === BASELINE_TOUR_SEL) baselineStep = s;
+    if (s.panel === 'cashflow' && s.tab) (cfStepsByTab[s.tab] = cfStepsByTab[s.tab] || []).push(s);
+    if (s.panel === 'insights' && s.insightsTab) (inStepsByTab[s.insightsTab] = inStepsByTab[s.insightsTab] || []).push(s);
+  });
+  const allOvSecs = Object.keys(OV_SECTION_TOUR);
+  const ovSorted = [...(ovOrder || allOvSecs).filter(k => k in ovStepsBySec), ...allOvSecs.filter(k => !(ovOrder || allOvSecs).includes(k) && k in ovStepsBySec)];
+  const sortedOvSteps = [];
+  ovSorted.forEach(sec => {
+    sortedOvSteps.push(ovStepsBySec[sec]);
+    if (sec === 'chart' && baselineStep) sortedOvSteps.push(baselineStep);
+  });
+  if (baselineStep && !ovSorted.includes('chart')) sortedOvSteps.push(baselineStep);
+  const cfSecs = ['banking', 'budgeting', 'taxes', 'scholarship'];
+  const cfSorted = [...(cfOrder || cfSecs), ...cfSecs.filter(t => !(cfOrder || cfSecs).includes(t))];
+  const inSecs = ['markets', 'news', 'signals', 'options'];
+  const inSorted = [...(inOrder || inSecs), ...inSecs.filter(t => !(inOrder || inSecs).includes(t))];
+  const result = [];
+  let ovInserted = false, cfInserted = false, inInserted = false;
+  for (const s of base) {
+    const isOvSec = ovSels.has(s.sel) || s.sel === BASELINE_TOUR_SEL;
+    const isCfStep = s.panel === 'cashflow' && s.tab;
+    const isInStep = s.panel === 'insights' && s.insightsTab;
+    if (isOvSec) { if (!ovInserted) { result.push(...sortedOvSteps); ovInserted = true; } }
+    else if (isCfStep) { if (!cfInserted) { result.push(...cfSorted.flatMap(tab => cfStepsByTab[tab] || [])); cfInserted = true; } }
+    else if (isInStep) { if (!inInserted) { result.push(...inSorted.flatMap(tab => inStepsByTab[tab] || [])); inInserted = true; } }
+    else result.push(s);
+  }
+  return result;
+}
 
 function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
   const [rect, setRect] = React.useState(null);
@@ -2980,6 +3035,7 @@ export default function Dashboard() {
   const [demoBudgetLimits, setDemoBudgetLimits] = useState({});
   const [editingLimit, setEditingLimit] = useState(null);
   const [limitInput, setLimitInput] = useState('');
+  const [budgetAlertsOpen, setBudgetAlertsOpen] = useState({});
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [goals, setGoals] = useState([]);
   const [showGoalForm, setShowGoalForm] = useState(false);
@@ -3582,8 +3638,16 @@ export default function Dashboard() {
   const canSeeAI           = isPremium;
   const showDemoAI         = isDemoData && !isPremium;
 
+  const getTourSteps = () => {
+    const base = effectiveProfessor ? PROFESSOR_TOUR_STEPS : effectiveStudent ? STUDENT_TOUR_STEPS : FINANCE_TOUR_STEPS;
+    const ovOrd = getOrder('overview', ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
+    const cfOrd = getOrder('cashflow-tabs', ['banking', 'budgeting', 'taxes', 'scholarship']);
+    const inOrd = getOrder('insights-tabs', ['markets', 'news', 'signals', 'options']);
+    return buildSortedSteps(base, ovOrd, cfOrd, inOrd);
+  };
+
   const openTourAt = (stepIndex) => {
-    const steps = effectiveProfessor ? PROFESSOR_TOUR_STEPS : effectiveStudent ? STUDENT_TOUR_STEPS : FINANCE_TOUR_STEPS;
+    const steps = getTourSteps();
     const s = steps[Math.min(stepIndex, steps.length - 1)];
     if (s.panel) { setPanel(s.panel); switchEduMode(false); }
     if (s.tab) setCashFlowTab(s.tab);
@@ -4161,7 +4225,7 @@ export default function Dashboard() {
     const text = chatInput.trim();
     if (!text || chatLoading) return;
 
-    if (isDemoData) {
+    if (isDemoData && !isPremium) {
       if (demoChatCount >= DEMO_CHAT_LIMIT) return;
       const responseIdx = demoChatCount % DEMO_CHAT_RESPONSES.length;
       setChatMessages(prev => [...prev, { role: 'user', content: text }, { role: 'assistant', content: DEMO_CHAT_RESPONSES[responseIdx] }]);
@@ -5425,7 +5489,7 @@ export default function Dashboard() {
 
       {/* ── MAIN CONTENT ────────────────────────────────── */}
       {showTour && (() => {
-        const _tourSteps = effectiveProfessor ? PROFESSOR_TOUR_STEPS : effectiveStudent ? STUDENT_TOUR_STEPS : FINANCE_TOUR_STEPS;
+        const _tourSteps = getTourSteps();
         const _applyStep = (s) => {
           if (s.panel) { setPanel(s.panel); switchEduMode(false); }
           if (s.tab) setCashFlowTab(s.tab);
@@ -7462,32 +7526,36 @@ export default function Dashboard() {
                             <div style={CARD}>
                               <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>Savings Rate Trend</div>
                               <div style={{ fontSize: 11, color: TEXT3, marginBottom: 14 }}>Month-by-month savings rate</div>
-                              <div style={{ position: 'relative', height: 96 }}>
-                                <div style={{ position: 'absolute', top: 38, left: 0, right: 0, height: 1, background: BORDER_C, zIndex: 0 }} />
-                                <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, height: '100%' }}>
-                                  {months.map((m, i) => {
-                                    const r = rateByMonth[i];
-                                    const c = r === null ? TEXT3 : r >= 20 ? GREEN : r >= 10 ? YELLOW : r >= 0 ? TEXT : RED;
-                                    const barH = r !== null ? Math.max(4, (Math.abs(r) / maxRate) * 34) : 0;
-                                    const isPos = r !== null && r >= 0;
-                                    return (
-                                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
-                                        {isPos && r !== null && (
-                                          <div style={{ fontSize: 10, color: c, fontWeight: 700, position: 'absolute', top: 38 - barH - 14 }}>{r}%</div>
-                                        )}
-                                        {isPos ? (
-                                          <div style={{ position: 'absolute', bottom: '50%', marginBottom: 1, width: '80%', height: barH, background: c, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
-                                        ) : r !== null ? (
-                                          <div style={{ position: 'absolute', top: '40%', marginTop: 1, width: '80%', height: barH, background: c, borderRadius: '0 0 3px 3px', opacity: 0.85 }} />
-                                        ) : null}
-                                        {!isPos && r !== null && (
-                                          <div style={{ fontSize: 10, color: c, fontWeight: 700, position: 'absolute', top: 38 + barH + 2 }}>{r}%</div>
-                                        )}
-                                        <div style={{ fontSize: 10, color: TEXT3, position: 'absolute', bottom: 0 }}>{m.label}</div>
-                                        {r === null && <div style={{ fontSize: 10, color: TEXT3, position: 'absolute', top: 28 }}>—</div>}
-                                      </div>
-                                    );
-                                  })}
+                              <div>
+                                <div style={{ position: 'relative', height: 88 }}>
+                                  <div style={{ position: 'absolute', top: 44, left: 0, right: 0, height: 1, background: BORDER_C }} />
+                                  <div style={{ display: 'flex', height: '100%', gap: 6 }}>
+                                    {months.map((m, i) => {
+                                      const r = rateByMonth[i];
+                                      const c = r === null ? TEXT3 : r >= 20 ? GREEN : r >= 10 ? YELLOW : r >= 0 ? GREEN : RED;
+                                      const barH = r !== null ? Math.max(4, (Math.abs(r) / maxRate) * 34) : 0;
+                                      const isPos = r !== null && r >= 0;
+                                      return (
+                                        <div key={i} style={{ flex: 1, position: 'relative' }}>
+                                          {isPos && r !== null && (
+                                            <div style={{ position: 'absolute', top: Math.max(2, 44 - barH - 13), left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
+                                          )}
+                                          {r !== null && (
+                                            <div style={{ position: 'absolute', left: '10%', right: '10%', height: barH, background: c, borderRadius: isPos ? '3px 3px 0 0' : '0 0 3px 3px', opacity: 0.85, ...(isPos ? { top: 44 - barH } : { top: 45 }) }} />
+                                          )}
+                                          {!isPos && r !== null && (
+                                            <div style={{ position: 'absolute', top: Math.min(46 + barH, 75), left: 0, right: 0, fontSize: 10, color: c, fontWeight: 700, textAlign: 'center', lineHeight: 1 }}>{r}%</div>
+                                          )}
+                                          {r === null && <div style={{ position: 'absolute', top: 40, left: 0, right: 0, fontSize: 10, color: TEXT3, textAlign: 'center' }}>—</div>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                                  {months.map((m, i) => (
+                                    <div key={i} style={{ flex: 1, fontSize: 10, color: TEXT3, textAlign: 'center' }}>{m.label}</div>
+                                  ))}
                                 </div>
                               </div>
                             </div>
@@ -7813,7 +7881,7 @@ export default function Dashboard() {
                           })}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, marginBottom: assignMode && selectedExpenseMonth === 0 ? 12 : 16 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 12, marginBottom: assignMode && selectedExpenseMonth === 0 ? 12 : 16 }}>
                         <div style={{ flex: 1 }}>
                           <AIInsightCard
                             isDemoData={showDemoAI}
@@ -8142,31 +8210,46 @@ export default function Dashboard() {
                                         ? notifPrefs.categoryThresholds[b.category]
                                         : [];
                                       const updateThresholds = (newArr) => setNotifPrefs(p => ({ ...p, categoryThresholds: { ...p.categoryThresholds, [b.category]: newArr } }));
+                                      const isOpen = !!budgetAlertsOpen[b.category];
+                                      const toggle = () => setBudgetAlertsOpen(p => ({ ...p, [b.category]: !p[b.category] }));
                                       return (
-                                        <div style={{ marginTop: 10, padding: '10px 12px', background: DARK, borderRadius: 8, border: BORDER }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: catThresholds.length > 0 ? 8 : 0 }}>
+                                        <div style={{ marginTop: 10, padding: '8px 12px', background: DARK, borderRadius: 8, border: BORDER }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={toggle}>
                                             <span style={{ fontSize: 11, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Budget Alerts</span>
-                                            <div style={{ display: 'flex', gap: 6 }}>
-                                              <button onClick={() => updateThresholds([...catThresholds, 80])}
-                                                style={{ fontSize: 11, padding: '3px 9px', background: MUTED, border: BORDER, borderRadius: 6, color: BLUE, cursor: 'pointer', fontWeight: 600 }}>+ Add</button>
-                                              <button onClick={async () => { try { await api.put('/notifications/prefs', notifPrefs); } catch {} }}
-                                                style={{ fontSize: 11, padding: '3px 9px', background: BLUE_BTN, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                              {!isOpen && catThresholds.length > 0 && (
+                                                <span style={{ fontSize: 10, color: TEXT3 }}>{catThresholds.length} threshold{catThresholds.length !== 1 ? 's' : ''}</span>
+                                              )}
+                                              {!isOpen && catThresholds.length === 0 && (
+                                                <span style={{ fontSize: 10, color: TEXT3 }}>default 80%</span>
+                                              )}
+                                              <span style={{ fontSize: 10, color: TEXT3, lineHeight: 1 }}>{isOpen ? '▲' : '▼'}</span>
                                             </div>
                                           </div>
-                                          {catThresholds.length === 0 && (
-                                            <div style={{ fontSize: 11, color: TEXT3 }}>Default: alert at 80%. Click + Add to set a custom threshold.</div>
+                                          {isOpen && (
+                                            <>
+                                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 8 }}>
+                                                <button onClick={e => { e.stopPropagation(); updateThresholds([...catThresholds, 80]); }}
+                                                  style={{ fontSize: 11, padding: '3px 9px', background: MUTED, border: BORDER, borderRadius: 6, color: BLUE, cursor: 'pointer', fontWeight: 600 }}>+ Add</button>
+                                                <button onClick={async e => { e.stopPropagation(); try { await api.put('/notifications/prefs', notifPrefs); } catch {} }}
+                                                  style={{ fontSize: 11, padding: '3px 9px', background: BLUE_BTN, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+                                              </div>
+                                              {catThresholds.length === 0 && (
+                                                <div style={{ fontSize: 11, color: TEXT3, marginTop: 6 }}>Default: alert at 80%. Click + Add to customize.</div>
+                                              )}
+                                              {catThresholds.map((val, idx) => (
+                                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                                                  <span style={{ fontSize: 11, color: TEXT3, width: 20 }}>#{idx + 1}</span>
+                                                  <input type="range" min="1" max="100" value={val}
+                                                    onChange={e => { const arr = [...catThresholds]; arr[idx] = Number(e.target.value); updateThresholds(arr); }}
+                                                    style={{ flex: 1, accentColor: BLUE_BTN }} />
+                                                  <span style={{ fontSize: 12, fontWeight: 700, color: TEXT, width: 34, textAlign: 'right' }}>{val}%</span>
+                                                  <button onClick={() => updateThresholds(catThresholds.filter((_, j) => j !== idx))}
+                                                    style={{ fontSize: 12, color: TEXT3, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                                                </div>
+                                              ))}
+                                            </>
                                           )}
-                                          {catThresholds.map((val, idx) => (
-                                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                                              <span style={{ fontSize: 11, color: TEXT3, width: 20 }}>#{idx + 1}</span>
-                                              <input type="range" min="1" max="100" value={val}
-                                                onChange={e => { const arr = [...catThresholds]; arr[idx] = Number(e.target.value); updateThresholds(arr); }}
-                                                style={{ flex: 1, accentColor: BLUE_BTN }} />
-                                              <span style={{ fontSize: 12, fontWeight: 700, color: TEXT, width: 34, textAlign: 'right' }}>{val}%</span>
-                                              <button onClick={() => updateThresholds(catThresholds.filter((_, j) => j !== idx))}
-                                                style={{ fontSize: 12, color: TEXT3, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
-                                            </div>
-                                          ))}
                                         </div>
                                       );
                                     })()}
@@ -11491,7 +11574,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 16px', flexShrink: 0 }}>
                   <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>AI Assistant</h1>
-                  {isDemoData && (
+                  {isDemoData && !isPremium && (
                     <span style={{ fontSize: 12, color: TEXT3, background: MUTED, border: BORDER, borderRadius: 6, padding: '3px 8px', fontWeight: 500 }}>
                       Demo: {DEMO_CHAT_LIMIT - demoChatCount} message{DEMO_CHAT_LIMIT - demoChatCount !== 1 ? 's' : ''} remaining
                     </span>
@@ -11543,7 +11626,7 @@ export default function Dashboard() {
                     )}
                     <div ref={chatBottomRef} />
                   </div>
-                  {isDemoData && demoChatCount >= DEMO_CHAT_LIMIT ? (
+                  {isDemoData && !isPremium && demoChatCount >= DEMO_CHAT_LIMIT ? (
                     <div style={{ padding: '24px', borderTop: BORDER, textAlign: 'center', flexShrink: 0 }}>
                       <div style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginBottom: 8 }}>You've used your demo messages</div>
                       <div style={{ fontSize: 13, color: TEXT2, marginBottom: 20, maxWidth: 360, margin: '0 auto 20px' }}>
@@ -11561,7 +11644,7 @@ export default function Dashboard() {
                         value={chatInput}
                         onChange={e => setChatInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                        placeholder={isDemoData ? `Ask about your demo finances… (${DEMO_CHAT_LIMIT - demoChatCount} left)` : 'Ask anything about your finances…'}
+                        placeholder={isDemoData && !isPremium ? `Ask about your demo finances… (${DEMO_CHAT_LIMIT - demoChatCount} left)` : 'Ask anything about your finances…'}
                         style={{ flex: 1, padding: '12px 16px', border: BORDER, borderRadius: 24, fontSize: 14, outline: 'none', background: MUTED, color: TEXT }}
                       />
                       <button

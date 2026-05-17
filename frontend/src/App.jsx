@@ -7,6 +7,9 @@ import Register from './pages/Register.jsx';
 import Landing from './pages/Landing.jsx';
 import Privacy from './pages/Privacy.jsx';
 import Terms from './pages/Terms.jsx';
+import About from './pages/About.jsx';
+import Security from './pages/Security.jsx';
+import ResponsibleDisclosure from './pages/ResponsibleDisclosure.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Pricing from './pages/Pricing.jsx';
@@ -38,8 +41,11 @@ export default function App() {
           <Route path="/register"  element={<GuestRoute><Register /></GuestRoute>} />
           <Route path="/app/*"     element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/pricing"         element={<Pricing />} />
-          <Route path="/privacy"         element={<Privacy />} />
-          <Route path="/terms"           element={<Terms />} />
+          <Route path="/privacy"               element={<Privacy />} />
+          <Route path="/terms"               element={<Terms />} />
+          <Route path="/about"               element={<About />} />
+          <Route path="/security"            element={<Security />} />
+          <Route path="/responsible-disclosure" element={<ResponsibleDisclosure />} />
           <Route path="/forgot-password"           element={<ForgotPassword />} />
           <Route path="/reset-password"            element={<ResetPassword />} />
           <Route path="/auth/microsoft/callback"   element={<MicrosoftCallback />} />

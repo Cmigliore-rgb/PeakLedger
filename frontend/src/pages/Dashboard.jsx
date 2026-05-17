@@ -287,8 +287,8 @@ const NAME_DOMAIN = {
 
 function logoUrls(name, ticker, logoUrl) {
   const urls = [];
-  if (logoUrl) urls.push(logoUrl);
   if (ticker) {
+    if (logoUrl && !logoUrl.startsWith('data:')) urls.push(logoUrl);
     urls.push(`https://financialmodelingprep.com/image-stock/${ticker}.png`);
     const d = TICKER_DOMAIN[ticker];
     if (d) {
@@ -298,18 +298,16 @@ function logoUrls(name, ticker, logoUrl) {
     return urls;
   }
   const lower = (name || '').toLowerCase();
-  const DIRECT_LOGOS = {
-    'capitalone.com': 'https://logo.clearbit.com/capitalone.com',
-  };
   for (const [k, d] of Object.entries(NAME_DOMAIN)) {
     if (lower.includes(k)) {
-      if (DIRECT_LOGOS[d]) urls.push(DIRECT_LOGOS[d]);
+      // Always prefer Clearbit over potentially broken Plaid data URIs for known institutions
       urls.push(`https://logo.clearbit.com/${d}`);
       urls.push(`https://www.google.com/s2/favicons?domain=${d}&sz=128`);
       return urls;
     }
   }
-  // Last-ditch: try Clearbit with a cleaned slug
+  // Unknown institution — try Plaid logoUrl then Clearbit slug
+  if (logoUrl && !logoUrl.startsWith('data:')) urls.push(logoUrl);
   const slug = lower.replace(/[^a-z]/g, '').slice(0, 20);
   if (slug.length > 2) urls.push(`https://logo.clearbit.com/${slug}.com`);
   return urls;
@@ -3098,7 +3096,9 @@ export default function Dashboard() {
   const [budgetSummaryView, setBudgetSummaryView] = useState(true);
   const [selectedIncomeMonth, setSelectedIncomeMonth] = useState(0); // 0 = current month, 1 = last month, etc.
   const [selectedExpenseMonth, setSelectedExpenseMonth] = useState(0); // 0 = current month, 1 = last month, etc.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('pl_sidebar_collapsed') === 'true'; } catch { return false; }
+  });
   const [settingsAnchor, setSettingsAnchor] = useState(null);
   const [hoveredNav, setHoveredNav] = useState(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -3561,8 +3561,7 @@ export default function Dashboard() {
   const [nwCardOrder, setNwCardOrder] = useState(() => { try { return JSON.parse(localStorage.getItem(`pl_nw_order_${user?.id}`) || 'null') || [0, 1, 2]; } catch { return [0, 1, 2]; } });
   const [projReturnRate, setProjReturnRate] = useState(7);
   const [projSavingsAdj, setProjSavingsAdj] = useState(0);
-  const [assignMode, setAssignMode] = useState(false);
-  const [pendingAlloc, setPendingAlloc] = useState({});
+  const [gcalConnected, setGcalConnected] = useState(false);
   const [accent, setAccent] = useState(() => localStorage.getItem('pl_accent') || 'blue');
   const ACCENT_PRESETS = {
     blue:   { accent: '#4da3ff', btn: '#0066f5' },
@@ -3616,6 +3615,27 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
   useEffect(() => { localStorage.setItem('pl_calendar', JSON.stringify(calendarEvents)); }, [calendarEvents]);
+  useEffect(() => {
+    if (!user) return;
+    // Check Google Calendar connection status, then auto-sync if connected
+    const urlParams = new URLSearchParams(window.location.search);
+    const justConnected = urlParams.get('cal_connected') === '1';
+    if (justConnected) window.history.replaceState({}, '', window.location.pathname);
+    api.get('/calendar/google/status').then(r => {
+      setGcalConnected(r.data.connected);
+      if (r.data.connected) {
+        api.get('/calendar/google/sync').then(s => {
+          const gcalEvents = s.data.events || [];
+          setCalendarEvents(prev => {
+            const filtered = prev.filter(e => !e._gcal);
+            const existing = new Set(filtered.map(e => `${e.title}|${e.date}`));
+            const fresh = gcalEvents.filter(e => !existing.has(`${e.title}|${e.date}`));
+            return [...filtered, ...fresh];
+          });
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [user]);
   useEffect(() => { localStorage.setItem('pl_announcements', JSON.stringify(profAnnouncements)); }, [profAnnouncements]);
   useEffect(() => {
     if (!user) return;
@@ -4058,7 +4078,9 @@ export default function Dashboard() {
         const digits = dtraw.replace(/[^0-9]/g, '').slice(0, 8);
         if (digits.length < 8) continue;
         const date = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-        const desc = unescape(get('DESCRIPTION'));
+        const rawDesc = unescape(get('DESCRIPTION'));
+        // Only keep descriptions that look like readable text (no encoded junk like ~;~;)
+        const desc = /^[A-Za-z0-9 .,!?'"()-]+$/.test(rawDesc.trim()) ? rawDesc.trim() : '';
         imported.push({ id: `ics_${Date.now()}_${i}`, title: summary, date, type: 'reminder', note: desc, _imported: true });
       }
       if (imported.length === 0) { setIcsImportMsg({ ok: false, text: 'No events found in that file.' }); return; }
@@ -4534,21 +4556,23 @@ export default function Dashboard() {
             {!sidebarCollapsed && <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: TEXT }}>PeakLedger</span>}
           </div>
           {!sidebarCollapsed && (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
               {streak > 0 && (
-                <span title={`${streak}-day login streak`} style={{ fontSize: 14, lineHeight: 1, flexShrink: 0, cursor: 'default' }}>🔥</span>
+                <div title={`${streak}-day login streak`} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 20, cursor: 'default', flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24' }}>{streak}d</span>
+                </div>
               )}
-              <button onClick={() => setNotifPanelOpen(v => !v)} style={{ position: 'relative', background: notifPanelOpen ? 'rgba(77,163,255,0.12)' : 'transparent', border: notifPanelOpen ? `1px solid rgba(77,163,255,0.3)` : '1px solid transparent', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15, flexShrink: 0 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="#4b5563" xmlns="http://www.w3.org/2000/svg"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+              <button onClick={() => setNotifPanelOpen(v => !v)} style={{ position: 'relative', background: notifPanelOpen ? 'rgba(77,163,255,0.12)' : 'transparent', border: notifPanelOpen ? `1px solid rgba(77,163,255,0.3)` : '1px solid transparent', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style={{ color: TEXT2 }} xmlns="http://www.w3.org/2000/svg"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
                 {inboxNotifs.filter(n => !n.read).length > 0 && (
-                  <span style={{ position: 'absolute', top: -5, right: -5, minWidth: 17, height: 17, background: RED, borderRadius: 9, fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: `2px solid ${SIDE_BG}` }}>
+                  <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, background: RED, borderRadius: 8, fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: `2px solid ${SIDE_BG}` }}>
                     {inboxNotifs.filter(n => !n.read).length > 9 ? '9+' : inboxNotifs.filter(n => !n.read).length}
                   </span>
                 )}
               </button>
-            </>
+            </div>
           )}
-          <button onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'transparent', border: '1px solid transparent', borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: TEXT3, fontSize: 16, flexShrink: 0 }}>{sidebarCollapsed ? '›' : '‹'}</button>
+          <button onClick={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('pl_sidebar_collapsed', String(next)); } catch {} return next; })} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${BORDER_C}`, borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: TEXT2, fontSize: 16, flexShrink: 0 }}>{sidebarCollapsed ? '›' : '‹'}</button>
         </div>
         <nav style={{ flex: 1, paddingTop: 10, overflowY: 'auto' }}>
         <div data-tour="sidebar-nav">
@@ -5113,7 +5137,27 @@ export default function Dashboard() {
               <button onClick={() => setShowLinkCal(false)} style={{ background: 'none', border: 'none', color: TEXT2, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
             <div style={{ fontSize: 13, color: TEXT2, lineHeight: 1.6, marginBottom: 20 }}>
-              Import events from any calendar app, or export your PeakLedger events. Imported events appear alongside your bill due dates.
+              Sync Google Calendar automatically, import a one-time snapshot, or export your PeakLedger events.
+            </div>
+
+            {/* Google Calendar row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: DARK, border: gcalConnected ? `1px solid ${GREEN}40` : BORDER, borderRadius: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: 22, flexShrink: 0 }}>📅</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>Google Calendar</div>
+                <div style={{ fontSize: 11, color: gcalConnected ? GREEN : TEXT3 }}>{gcalConnected ? 'Connected — syncs automatically' : 'Live sync with your Google Calendar'}</div>
+              </div>
+              {gcalConnected ? (
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => api.get('/calendar/google/sync').then(r => {
+                    const gcalEvents = r.data.events || [];
+                    setCalendarEvents(prev => { const filtered = prev.filter(e => !e._gcal); const existing = new Set(filtered.map(e => `${e.title}|${e.date}`)); const fresh = gcalEvents.filter(e => !existing.has(`${e.title}|${e.date}`)); return [...filtered, ...fresh]; });
+                  }).catch(() => {})} style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: GREEN, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Sync now</button>
+                  <button onClick={() => api.delete('/calendar/google/disconnect').then(() => { setGcalConnected(false); setCalendarEvents(prev => prev.filter(e => !e._gcal)); }).catch(() => {})} style={{ padding: '6px 12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 7, color: RED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Disconnect</button>
+                </div>
+              ) : (
+                <button onClick={() => api.get('/calendar/google/auth').then(r => { window.location.href = r.data.url; }).catch(() => {})} style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Connect</button>
+              )}
             </div>
 
             {/* Import row */}
@@ -7905,73 +7949,6 @@ export default function Dashboard() {
                           text={adviceState.budgeting?.text}
                         />
                       </div>
-                      {selectedExpenseMonth === 0 && !assignMode && (
-                        <div style={{ marginTop: 8, marginBottom: 16 }}>
-                          <button onClick={() => {
-                            const init = {};
-                            displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
-                            setPendingAlloc(init);
-                            setAssignMode(true);
-                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                            Plan This Month
-                          </button>
-                        </div>
-                      )}
-                      {assignMode && selectedExpenseMonth === 0 && (() => {
-                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                        const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
-                        const monthIncome = monthTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) || (isDemoData ? 4850 : 0);
-                        const cats = displayBudget.length > 0 ? displayBudget.map(b => b.category) : activeBudget.map(b => b.category);
-                        const totalAssigned = Object.values(pendingAlloc).reduce((s, v) => s + (parseFloat(v) || 0), 0);
-                        const remaining = monthIncome - totalAssigned;
-                        return (
-                          <div style={{ ...CARD, marginBottom: 20, borderColor: `${BLUE}40` }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                              <div>
-                                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Plan This Month</div>
-                                <div style={{ fontSize: 12, color: TEXT2 }}>Assign {fmt(monthIncome)} income across categories</div>
-                              </div>
-                              <button onClick={() => { setAssignMode(false); setPendingAlloc({}); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
-                            </div>
-                            <div style={{ padding: '10px 14px', background: remaining >= 0 ? `${GREEN}12` : `${RED}12`, border: `1px solid ${remaining >= 0 ? `${GREEN}40` : `${RED}40`}`, borderRadius: 8, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: remaining >= 0 ? GREEN : RED }}>
-                                {remaining >= 0 ? `${fmt(remaining)} left to assign` : `Over-assigned by ${fmt(Math.abs(remaining))}`}
-                              </span>
-                              <span style={{ fontSize: 12, color: TEXT2, fontFamily: 'monospace' }}>{fmt(totalAssigned)} / {fmt(monthIncome)}</span>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                              {cats.map(cat => {
-                                const curr = pendingAlloc[cat] ?? '';
-                                const spent = displayBudget.find(b => b.category === cat)?.total || 0;
-                                return (
-                                  <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{fmtCat(cat)}</span>
-                                    {spent > 0 && <span style={{ fontSize: 11, color: TEXT3, fontFamily: 'monospace', flexShrink: 0 }}>{fmt(spent)} spent</span>}
-                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                                      <span style={{ position: 'absolute', left: 8, fontSize: 12, color: TEXT3, pointerEvents: 'none' }}>$</span>
-                                      <input type="number" min="0" step="10" value={curr} placeholder="0"
-                                        onChange={e => setPendingAlloc(p => ({ ...p, [cat]: e.target.value }))}
-                                        style={{ width: 90, padding: '5px 8px 5px 18px', background: DARK, border: parseFloat(curr) > 0 ? `1px solid ${BLUE}60` : BORDER, borderRadius: 6, color: TEXT, fontSize: 13, outline: 'none' }} />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                              <button onClick={() => { setAssignMode(false); setPendingAlloc({}); }} style={{ padding: '7px 16px', background: MUTED, border: BORDER, borderRadius: 8, color: TEXT2, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-                              <button onClick={async () => {
-                                const updates = { ...budgetLimits };
-                                Object.entries(pendingAlloc).forEach(([cat, v]) => { const n = parseFloat(v); if (!isNaN(n) && n > 0) updates[cat] = n; });
-                                setBudgetLimits(updates);
-                                try { await api.put('/budget/limits', updates); } catch {}
-                                setAssignMode(false); setPendingAlloc({});
-                              }} style={{ padding: '7px 20px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                                Apply Allocations
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })()}
                       <div className="lc" style={CARD}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                           <div>
@@ -11998,10 +11975,30 @@ export default function Dashboard() {
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: 'rgba(167,139,250,0.12)', color: '#a78bfa' }}>Admin Only</span>
                         {adminUsers && <span style={{ fontSize: 11, color: TEXT3 }}>{adminUsers.length} users</span>}
                       </div>
-                      <button onClick={fetchAdminUsers} disabled={adminUsersLoading}
-                        style={{ padding: '6px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: adminUsersLoading ? 'default' : 'pointer', opacity: adminUsersLoading ? 0.6 : 1 }}>
-                        {adminUsersLoading ? 'Loading…' : adminUsers ? '↻ Refresh' : 'Load Users'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {adminUsers && (
+                          <button onClick={() => {
+                            const headers = ['Name', 'Email', 'Role', 'Plan', 'Verified', 'Joined'];
+                            const rows = adminUsers.map(u => [
+                              u.name || '',
+                              u.email,
+                              u.role,
+                              u.tier,
+                              u.email_verified ? 'Yes' : 'No',
+                              u.created_at ? u.created_at.slice(0, 10) : '',
+                            ]);
+                            const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+                            const blob = new Blob([csv], { type: 'text/csv' });
+                            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'peakledger-users.csv'; a.click();
+                          }} style={{ padding: '6px 14px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: GREEN, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                            Export CSV
+                          </button>
+                        )}
+                        <button onClick={fetchAdminUsers} disabled={adminUsersLoading}
+                          style={{ padding: '6px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: adminUsersLoading ? 'default' : 'pointer', opacity: adminUsersLoading ? 0.6 : 1 }}>
+                          {adminUsersLoading ? 'Loading…' : adminUsers ? '↻ Refresh' : 'Load Users'}
+                        </button>
+                      </div>
                     </div>
 
                     {adminUsers && (

@@ -235,6 +235,8 @@ try {
 } catch {}
 try { db.exec(`ALTER TABLE course_codes ADD COLUMN selected_assignments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE course_codes ADD COLUMN color TEXT`); } catch {}
+try { db.exec('ALTER TABLE users ADD COLUMN google_calendar_refresh_token TEXT'); } catch {}
+try { db.exec('ALTER TABLE users ADD COLUMN google_calendar_connected_at TEXT'); } catch {}
 try {
   db.exec(`
     CREATE TABLE IF NOT EXISTS goals (

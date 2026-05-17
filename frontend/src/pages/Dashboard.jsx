@@ -7789,13 +7789,6 @@ export default function Dashboard() {
                           Demo data. Connect accounts to see your real finances.
                         </div>
                       )}
-                      <AIInsightCard
-                        isDemoData={isDemoData}
-                        demoKey="budgeting"
-                        onGetAdvice={canSeeAI ? () => getAdvice('budgeting') : undefined}
-                        loading={adviceState.budgeting?.loading}
-                        text={adviceState.budgeting?.text}
-                      />
                       <div style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 24, marginTop: 20 }}>
                         {[
                           { label: 'Month-to-Date Spend', value: fmt(hasRealExp ? activeMonthlySpend : selExp.total) },
@@ -7827,18 +7820,27 @@ export default function Dashboard() {
                           })}
                         </div>
                       </div>
-                      {selectedExpenseMonth === 0 && !assignMode && (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, marginTop: 12 }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, marginBottom: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <AIInsightCard
+                            isDemoData={isDemoData}
+                            demoKey="budgeting"
+                            onGetAdvice={canSeeAI ? () => getAdvice('budgeting') : undefined}
+                            loading={adviceState.budgeting?.loading}
+                            text={adviceState.budgeting?.text}
+                          />
+                        </div>
+                        {selectedExpenseMonth === 0 && !assignMode && (
                           <button onClick={() => {
                             const init = {};
                             displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
                             setPendingAlloc(init);
                             setAssignMode(true);
-                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
                             Plan This Month
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       <div className="lc" style={CARD}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                           <div>

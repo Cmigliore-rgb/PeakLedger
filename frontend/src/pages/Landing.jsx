@@ -325,12 +325,12 @@ export default function Landing() {
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Legal</div>
             {[
-              { label: 'Terms of Service', action: () => navigate('/terms') },
-              { label: 'Privacy Policy', action: () => navigate('/privacy') },
-              { label: 'Security Policy', action: () => {} },
-              { label: 'Responsible Disclosure', action: () => { window.location.href = 'mailto:security@peakledger.app'; } },
-            ].map(({ label, action }) => (
-              <button key={label} onClick={action} style={{ display: 'block', background: 'none', border: 'none', color: TEXT2, fontSize: 13, cursor: 'pointer', padding: '5px 0', textAlign: 'left', lineHeight: 1.5 }}>{label}</button>
+              { label: 'Terms of Service', href: '/terms' },
+              { label: 'Privacy Policy', href: '/privacy' },
+              { label: 'Security Policy', href: 'mailto:security@peakledger.app' },
+              { label: 'Responsible Disclosure', href: 'mailto:security@peakledger.app' },
+            ].map(({ label, href }) => (
+              <a key={label} href={href} style={{ display: 'block', color: TEXT2, fontSize: 13, padding: '5px 0', textAlign: 'left', lineHeight: 1.5, textDecoration: 'none' }}>{label}</a>
             ))}
           </div>
         </div>

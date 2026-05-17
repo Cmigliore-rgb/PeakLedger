@@ -2955,7 +2955,7 @@ function useCountUp(target, duration = 700) {
 
 export default function Dashboard() {
   const { user, logout, refreshUser, isPremium, isProfessor, isAdmin, isStudent, isUser } = useAuth();
-  const [panel, setPanel] = useState(() => localStorage.getItem('pl_panel') || 'overview');
+  const [panel, setPanel] = useState(() => localStorage.getItem(`pl_panel_${user?.id}`) || 'overview');
   const [accounts, setAccounts] = useState([]);
   const [isDemoData, setIsDemoData] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -3024,8 +3024,8 @@ export default function Dashboard() {
   const [sp500Period, setSp500Period] = useState('1y');
   const [learnCategory, setLearnCategory] = useState(() => {
     try {
-      const h = new Set(JSON.parse(localStorage.getItem('pl_hidden_subtabs') || '[]'));
-      const saved = JSON.parse(localStorage.getItem('pl_layout_order') || '{}')['learn-tabs'];
+      const h = new Set(JSON.parse(localStorage.getItem(`pl_hidden_subtabs_${user?.id}`) || '[]'));
+      const saved = JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}')['learn-tabs'];
       const def = PANEL_SUBTABS.learn.map(s => s.key);
       const order = saved?.length ? [...saved.filter(id => def.includes(id)), ...def.filter(id => !saved.includes(id))] : def;
       return order.find(v => !h.has(`learn:${v}`)) || 'essentials';
@@ -3065,7 +3065,7 @@ export default function Dashboard() {
     () => localStorage.getItem('pl_hide_edu') === '1'
   );
   const [toast, setToast] = useState(null);
-  const [layoutOrder, setLayoutOrder] = useState(() => { try { return JSON.parse(localStorage.getItem('pl_layout_order') || '{}'); } catch { return {}; } });
+  const [layoutOrder, setLayoutOrder] = useState(() => { try { return JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}'); } catch { return {}; } });
   const getOrder = (key, defaults) => { const s = layoutOrder[key]; if (!s?.length) return defaults; const ss = new Set(s); return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))]; };
   const handleReorder = (key, defaults) => (srcId, tgtId) => { const order = getOrder(key, defaults); const si = order.indexOf(srcId), ti = order.indexOf(tgtId); if (si === -1 || ti === -1 || si === ti) return; const next = [...order]; next.splice(si, 1); next.splice(ti, 0, srcId); setLayoutOrder(prev => ({ ...prev, [key]: next })); };
   const resetLayout = (key) => setLayoutOrder(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -3216,19 +3216,19 @@ export default function Dashboard() {
   const logoSrc = theme === 'light' ? '/logo_icon_light_mode.png?v=1' : '/logo-icon.png?v=7';
 
   const [hiddenPanels, setHiddenPanels] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('pl_hidden') || '[]')); } catch { return new Set(); }
+    try { return new Set(JSON.parse(localStorage.getItem(`pl_hidden_${user?.id}`) || '[]')); } catch { return new Set(); }
   });
   const toggleHidden = (key) => {
     setHiddenPanels(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
-      localStorage.setItem('pl_hidden', JSON.stringify([...next]));
+      localStorage.setItem(`pl_hidden_${user?.id}`, JSON.stringify([...next]));
       return next;
     });
   };
 
   const [hiddenSubtabs, setHiddenSubtabs] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('pl_hidden_subtabs') || '[]')); } catch { return new Set(); }
+    try { return new Set(JSON.parse(localStorage.getItem(`pl_hidden_subtabs_${user?.id}`) || '[]')); } catch { return new Set(); }
   });
   const toggleSubtabHidden = (panelKey, subtabKey) => {
     const id = `${panelKey}:${subtabKey}`;
@@ -3236,7 +3236,7 @@ export default function Dashboard() {
     setHiddenSubtabs(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      localStorage.setItem('pl_hidden_subtabs', JSON.stringify([...next]));
+      localStorage.setItem(`pl_hidden_subtabs_${user?.id}`, JSON.stringify([...next]));
       return next;
     });
     if (hiding) {
@@ -3340,8 +3340,8 @@ export default function Dashboard() {
   const [greekTime, setGreekTime]           = useState(3);
   const [cashFlowTab, setCashFlowTab] = useState(() => {
     try {
-      const h = new Set(JSON.parse(localStorage.getItem('pl_hidden_subtabs') || '[]'));
-      const saved = JSON.parse(localStorage.getItem('pl_layout_order') || '{}')['cashflow-tabs'];
+      const h = new Set(JSON.parse(localStorage.getItem(`pl_hidden_subtabs_${user?.id}`) || '[]'));
+      const saved = JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}')['cashflow-tabs'];
       const def = PANEL_SUBTABS.cashflow.map(s => s.key);
       const order = saved?.length ? [...saved.filter(id => def.includes(id)), ...def.filter(id => !saved.includes(id))] : def;
       return order.find(v => !h.has(`cashflow:${v}`)) || 'banking';
@@ -3351,8 +3351,8 @@ export default function Dashboard() {
   const [selectedInstitution, setSelectedInstitution] = useState(null);
   const [insightsTab, setInsightsTab] = useState(() => {
     try {
-      const h = new Set(JSON.parse(localStorage.getItem('pl_hidden_subtabs') || '[]'));
-      const saved = JSON.parse(localStorage.getItem('pl_layout_order') || '{}')['insights-tabs'];
+      const h = new Set(JSON.parse(localStorage.getItem(`pl_hidden_subtabs_${user?.id}`) || '[]'));
+      const saved = JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}')['insights-tabs'];
       const def = PANEL_SUBTABS.insights.map(s => s.key);
       const order = saved?.length ? [...saved.filter(id => def.includes(id)), ...def.filter(id => !saved.includes(id))] : def;
       return order.find(v => !h.has(`insights:${v}`)) || 'markets';
@@ -3520,7 +3520,7 @@ export default function Dashboard() {
   }, [accent]);
   const prevPanelRef = useRef(panel);
   useEffect(() => {
-    localStorage.setItem('pl_panel', panel);
+    localStorage.setItem(`pl_panel_${user?.id}`, panel);
     const titles = { overview: 'Overview', cashflow: 'Cash Flow', investments: 'Investments', insights: 'Market Insights', learn: 'Learn', settings: 'Settings', assistant: 'AI Assistant', 'edu-courses': 'My Courses', 'edu-assignments': 'Assignments', 'prof-dashboard': 'Professor Hub' };
     document.title = `${titles[panel] || 'Dashboard'} | PeakLedger`;
     if (mainRef.current) scrollPositions.current[prevPanelRef.current] = mainRef.current.scrollTop;
@@ -3554,7 +3554,7 @@ export default function Dashboard() {
       window.history.replaceState({}, '', '/app');
     }
   }, []);
-  useEffect(() => { localStorage.setItem('pl_layout_order', JSON.stringify(layoutOrder)); }, [layoutOrder]);
+  useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
   useEffect(() => { localStorage.setItem('pl_calendar', JSON.stringify(calendarEvents)); }, [calendarEvents]);
   useEffect(() => { localStorage.setItem('pl_announcements', JSON.stringify(profAnnouncements)); }, [profAnnouncements]);
   useEffect(() => {
@@ -3568,12 +3568,12 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     const today = new Date().toISOString().slice(0, 10);
-    let d; try { d = JSON.parse(localStorage.getItem('pl_streak') || 'null'); } catch { d = null; }
-    if (!d) { localStorage.setItem('pl_streak', JSON.stringify({ streak: 1, lastDate: today })); setStreak(1); return; }
+    let d; try { d = JSON.parse(localStorage.getItem(`pl_streak_${user?.id}`) || 'null'); } catch { d = null; }
+    if (!d) { localStorage.setItem(`pl_streak_${user?.id}`, JSON.stringify({ streak: 1, lastDate: today })); setStreak(1); return; }
     if (d.lastDate === today) { setStreak(d.streak); return; }
     const prev = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const next = d.lastDate === prev ? d.streak + 1 : 1;
-    localStorage.setItem('pl_streak', JSON.stringify({ streak: next, lastDate: today }));
+    localStorage.setItem(`pl_streak_${user?.id}`, JSON.stringify({ streak: next, lastDate: today }));
     setStreak(next);
   }, [user]);
 
@@ -6019,8 +6019,7 @@ export default function Dashboard() {
                       insights.push({ type: 'good', text: `${fmt(nextMile - netWorth)} from your next net worth milestone: ${fmt(nextMile)}` });
                     }
                   } else {
-                    insights.push({ type: 'good', text: 'Emergency fund covers 2.1 months of expenses' });
-                    insights.push({ type: 'warn', text: 'Food & Dining is 18% above your 3-month average' });
+                    insights.push({ type: 'neutral', text: 'Connect an account to see personalized insights' });
                   }
                   if (streak >= 7) insights.push({ type: 'neutral', text: `🔥 ${streak}-day streak — keep it up` });
                   if (insights.length === 0) return null;
@@ -6046,7 +6045,12 @@ export default function Dashboard() {
 
                 <DragSection id="stats" panel="overview" order={_ovOrder} onReorder={_ovReorder} handleTop={30}>
                 <div data-tour="overview-snapshot">
-                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 10 : 16, marginBottom: 24, marginTop: 24 }}>
+                {isDemoData && (
+                  <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '5px 12px', marginTop: 16, marginBottom: 4, display: 'inline-block' }}>
+                    Demo data. Connect an account to see your real numbers.
+                  </div>
+                )}
+                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 10 : 16, marginBottom: 24, marginTop: isDemoData ? 8 : 24 }}>
                   {(() => {
                     const NW_CARDS = [
                       { key: 'nw',   label: 'Net Worth',         value: fmt(animNetWorth),    sub: 'Assets − Liabilities' },
@@ -6069,11 +6073,6 @@ export default function Dashboard() {
                       </div>
                     ));
                   })()}
-                {isDemoData && (
-                  <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '5px 12px', marginBottom: 8, display: 'inline-block' }}>
-                    Demo data. Connect an account to see your real numbers.
-                  </div>
-                )}
                 </div>
                 </div>{/* overview-snapshot */}
                 </DragSection>
@@ -6227,6 +6226,8 @@ export default function Dashboard() {
                       {isDemoData ? (
                         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
                           <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${GREEN}12`, color: GREEN, fontWeight: 500 }}>Saving 25% of income this month: on target</div>
+                          <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${GREEN}12`, color: GREEN, fontWeight: 500 }}>Emergency fund covers 2.1 months of expenses</div>
+                          <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${RED}12`, color: RED, fontWeight: 500 }}>Food & Dining is 18% above your 3-month average</div>
                         </div>
                       ) : (() => {
                         const _now = new Date();
@@ -7795,18 +7796,6 @@ export default function Dashboard() {
                         loading={adviceState.budgeting?.loading}
                         text={adviceState.budgeting?.text}
                       />
-                      {selectedExpenseMonth === 0 && !assignMode && (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, marginTop: 20 }}>
-                          <button onClick={() => {
-                            const init = {};
-                            displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
-                            setPendingAlloc(init);
-                            setAssignMode(true);
-                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                            Plan This Month
-                          </button>
-                        </div>
-                      )}
                       <div style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 24, marginTop: 20 }}>
                         {[
                           { label: 'Month-to-Date Spend', value: fmt(hasRealExp ? activeMonthlySpend : selExp.total) },
@@ -7838,6 +7827,18 @@ export default function Dashboard() {
                           })}
                         </div>
                       </div>
+                      {selectedExpenseMonth === 0 && !assignMode && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, marginTop: 12 }}>
+                          <button onClick={() => {
+                            const init = {};
+                            displayBudget.forEach(b => { if (budgetLimits[b.category]) init[b.category] = String(budgetLimits[b.category]); });
+                            setPendingAlloc(init);
+                            setAssignMode(true);
+                          }} style={{ padding: '7px 16px', background: BLUE_BTN, border: 'none', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                            Plan This Month
+                          </button>
+                        </div>
+                      )}
                       <div className="lc" style={CARD}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                           <div>
@@ -11634,8 +11635,8 @@ export default function Dashboard() {
 
                   {(hiddenPanels.size > 0 || hiddenSubtabs.size > 0) && (
                     <button onClick={() => {
-                      setHiddenPanels(new Set()); localStorage.removeItem('pl_hidden');
-                      setHiddenSubtabs(new Set()); localStorage.removeItem('pl_hidden_subtabs');
+                      setHiddenPanels(new Set()); localStorage.removeItem(`pl_hidden_${user?.id}`);
+                      setHiddenSubtabs(new Set()); localStorage.removeItem(`pl_hidden_subtabs_${user?.id}`);
                     }} style={{ marginTop: 4, padding: '8px 16px', background: 'transparent', border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, cursor: 'pointer' }}>
                       Reset: show all tabs
                     </button>

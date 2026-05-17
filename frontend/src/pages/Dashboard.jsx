@@ -3498,7 +3498,7 @@ export default function Dashboard() {
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [expandedNotifId, setExpandedNotifId] = useState(null);
   const [streak, setStreak] = useState(0);
-  const [nwCardOrder, setNwCardOrder] = useState(() => { try { return JSON.parse(localStorage.getItem('pl_nw_order') || 'null') || [0, 1, 2]; } catch { return [0, 1, 2]; } });
+  const [nwCardOrder, setNwCardOrder] = useState(() => { try { return JSON.parse(localStorage.getItem(`pl_nw_order_${user?.id}`) || 'null') || [0, 1, 2]; } catch { return [0, 1, 2]; } });
   const [projReturnRate, setProjReturnRate] = useState(7);
   const [projSavingsAdj, setProjSavingsAdj] = useState(0);
   const [assignMode, setAssignMode] = useState(false);
@@ -6021,7 +6021,6 @@ export default function Dashboard() {
                   } else {
                     insights.push({ type: 'good', text: 'Emergency fund covers 2.1 months of expenses' });
                     insights.push({ type: 'warn', text: 'Food & Dining is 18% above your 3-month average' });
-                    insights.push({ type: 'neutral', text: 'Emergency fund covers 2.1 months of expenses' });
                   }
                   if (streak >= 7) insights.push({ type: 'neutral', text: `🔥 ${streak}-day streak — keep it up` });
                   if (insights.length === 0) return null;
@@ -6055,7 +6054,7 @@ export default function Dashboard() {
                       { key: 'liab', label: 'Total Liabilities', value: fmt(animLiabilities), sub: (() => { const n = (liabilities.credit?.length || 0) + (liabilities.student?.length || 0) + (liabilities.mortgage?.length || 0) + (liabilities.car?.length || 0); return `${n} account${n !== 1 ? 's' : ''}`; })() },
                     ];
                     const order = nwCardOrder.map(i => NW_CARDS[i]);
-                    const swap = (a, b) => { const o = [...nwCardOrder]; [o[a], o[b]] = [o[b], o[a]]; setNwCardOrder(o); try { localStorage.setItem('pl_nw_order', JSON.stringify(o)); } catch {} };
+                    const swap = (a, b) => { const o = [...nwCardOrder]; [o[a], o[b]] = [o[b], o[a]]; setNwCardOrder(o); try { localStorage.setItem(`pl_nw_order_${user?.id}`, JSON.stringify(o)); } catch {} };
                     return order.map((card, pos) => (
                       <div key={card.key} className="lc" style={{ ...CARD, position: 'relative', ...(isMobile ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } : {}) }}>
                         {!isMobile && (
@@ -6070,6 +6069,11 @@ export default function Dashboard() {
                       </div>
                     ));
                   })()}
+                {isDemoData && (
+                  <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '5px 12px', marginBottom: 8, display: 'inline-block' }}>
+                    Demo data. Connect an account to see your real numbers.
+                  </div>
+                )}
                 </div>
                 </div>{/* overview-snapshot */}
                 </DragSection>
@@ -6220,7 +6224,11 @@ export default function Dashboard() {
                         <span style={{ position: 'absolute', left: `${TARGET}%`, transform: 'translateX(-50%)', color: rate !== null && rate >= TARGET ? GREEN : TEXT3 }}>{TARGET}% target</span>
                         <span style={{ position: 'absolute', right: 0 }}>100%</span>
                       </div>
-                      {!isDemoData && (() => {
+                      {isDemoData ? (
+                        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${GREEN}12`, color: GREEN, fontWeight: 500 }}>Saving 25% of income this month: on target</div>
+                        </div>
+                      ) : (() => {
                         const _now = new Date();
                         const daysElapsed = _now.getDate() || 1;
                         const daysInMonth = new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate();
@@ -8455,7 +8463,7 @@ export default function Dashboard() {
                           const mInc = monthTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
                           monthlySavings = Math.max(mInc - activeMonthlySpend, 0);
                         }
-                        const adjSavings = monthlySavings * (1 + projSavingsAdj / 100);
+                        const adjSavings = Math.max(monthlySavings + projSavingsAdj, 0);
                         const r = (projReturnRate / 100) / 12;
                         const fv = (n) => r === 0 ? pv + adjSavings * n : pv * Math.pow(1 + r, n) + adjSavings * ((Math.pow(1 + r, n) - 1) / r);
                         const milestones = [
@@ -8476,7 +8484,7 @@ export default function Dashboard() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                               <div>
                                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Net Worth Projections</div>
-                                <div style={{ fontSize: 11, color: TEXT2 }}>{fmt(Math.round(adjSavings))}/mo · {projReturnRate}% return · {projSavingsAdj !== 0 ? `${projSavingsAdj > 0 ? '+' : ''}${projSavingsAdj}% savings adj` : 'current pace'}</div>
+                                <div style={{ fontSize: 11, color: TEXT2 }}>{fmt(Math.round(adjSavings))}/mo saved · {projReturnRate}% return{projSavingsAdj !== 0 ? ` · ${projSavingsAdj > 0 ? '+' : ''}${fmt(projSavingsAdj)}/mo adj` : ''}</div>
                               </div>
                               {isDemoData2 && <span style={{ fontSize: 10, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '3px 8px', flexShrink: 0 }}>Demo</span>}
                             </div>
@@ -8509,13 +8517,13 @@ export default function Dashboard() {
                               <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                                   <span style={{ fontSize: 11, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Save More</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: projSavingsAdj > 0 ? GREEN : TEXT2 }}>{projSavingsAdj > 0 ? `+${projSavingsAdj}` : projSavingsAdj}%</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: projSavingsAdj > 0 ? GREEN : TEXT2 }}>{projSavingsAdj > 0 ? `+${fmt(projSavingsAdj)}` : projSavingsAdj === 0 ? 'Current' : `-${fmt(Math.abs(projSavingsAdj))}`}/mo</span>
                                 </div>
-                                <input type="range" min="-50" max="100" step="5" value={projSavingsAdj}
+                                <input type="range" min="-500" max="2000" step="50" value={projSavingsAdj}
                                   onChange={e => setProjSavingsAdj(Number(e.target.value))}
                                   style={{ width: '100%', accentColor: GREEN, cursor: 'pointer' }} />
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: TEXT3, marginTop: 2 }}>
-                                  <span>-50%</span><span>+0%</span><span>+100%</span>
+                                  <span>-$500</span><span>current</span><span>+$2k</span>
                                 </div>
                               </div>
                             </div>

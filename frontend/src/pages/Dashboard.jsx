@@ -1290,9 +1290,10 @@ function FearGreedGauge({ score, rating }) {
       <div style={{ display: 'flex', gap: 4, marginTop: 14, flexWrap: 'wrap' }}>
         {ZONES.map(z => {
           const active = z.label === zone.label;
+          const mobLabel = z.label.replace('Extreme Fear', 'Ext. Fear').replace('Extreme Greed', 'Ext. Greed');
           return (
-            <div key={z.label} style={{ flex: 1, minWidth: _mob ? 44 : 60, padding: '5px 6px', borderRadius: 6, textAlign: 'center', background: active ? `${z.color}22` : DARK, border: `1px solid ${active ? z.color : BORDER_C}` }}>
-              <div style={{ fontSize: 8, fontWeight: 700, whiteSpace: 'nowrap', color: active ? z.color : TEXT3 }}>{z.label}</div>
+            <div key={z.label} style={{ flex: 1, minWidth: _mob ? 52 : 60, padding: '5px 6px', borderRadius: 6, textAlign: 'center', background: active ? `${z.color}22` : DARK, border: `1px solid ${active ? z.color : BORDER_C}` }}>
+              <div style={{ fontSize: _mob ? 9 : 8, fontWeight: 700, lineHeight: 1.2, color: active ? z.color : TEXT3 }}>{_mob ? mobLabel : z.label}</div>
             </div>
           );
         })}
@@ -7049,7 +7050,7 @@ export default function Dashboard() {
 
                 <DragSection id="txns" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '3fr 2fr', gap: 16 }}>
-                  <div data-tour="overview-txns" className="lc" style={CARD}>
+                  <div data-tour="overview-txns" className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden' }}>
                     <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Transactions</div>
                     {transactions.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '28px 16px' }}>
@@ -7098,7 +7099,7 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
-                  <div className="lc" style={CARD}>
+                  <div className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden' }}>
                     <div style={{ fontWeight: 600, marginBottom: 12 }}>Market Alerts</div>
                     <div className="card-scroll" style={{ maxHeight: 260 }}>
                       {articles.map((a, i, arr) => (
@@ -9045,16 +9046,16 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: isMobile ? 8 : 16, marginBottom: 24 }}>
                         {[
-                          { label: 'Monthly Total', mLabel: 'Monthly',   value: fmt(totalMonthly) },
-                          { label: 'Annual Total',  mLabel: 'Annual',    value: fmt(totalMonthly * 12), color: RED },
-                          { label: 'Due (30d)',      mLabel: 'Due (30d)', value: fmt(upcomingAmt), color: upcomingAmt > 0 ? YELLOW : TEXT },
-                          { label: isMockData ? 'Sample' : 'Detected', mLabel: isMockData ? 'Sample' : 'Detected', value: withNext.length },
-                        ].map(({ label, mLabel, value, color }) => (
-                          <div key={label} className="lc" style={{ ...CARD, ...(isMobile ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 } : {}) }}>
-                            <div style={{ fontSize: 10, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', flexShrink: 0 }}>{isMobile ? mLabel : label}</div>
-                            <div style={{ fontSize: isMobile ? 18 : 26, fontWeight: 700, marginTop: isMobile ? 0 : 8, letterSpacing: '-0.5px', color: color || TEXT, fontFamily: 'monospace' }}>{value}</div>
+                          { label: 'Monthly Total', value: fmt(totalMonthly) },
+                          { label: 'Annual Total',  value: fmt(totalMonthly * 12), color: RED },
+                          { label: 'Due (30d)',      value: fmt(upcomingAmt), color: upcomingAmt > 0 ? YELLOW : TEXT },
+                          { label: isMockData ? 'Sample' : 'Detected', value: withNext.length },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="lc" style={{ ...CARD, ...(isMobile ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' } : {}) }}>
+                            <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</div>
+                            <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 700, marginTop: isMobile ? 0 : 8, letterSpacing: '-0.5px', color: color || TEXT, fontFamily: 'monospace' }}>{value}</div>
                           </div>
                         ))}
                       </div>
@@ -10298,8 +10299,34 @@ export default function Dashboard() {
                           );
                         })}
                       </div>
+                      {isMobile ? (
+                        <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                          {holdings.map((h,i)=>{
+                            const ticker=h.security?.ticker_symbol||'—';
+                            const name=h.security?.name||'—';
+                            const qty=h.quantity||0, price=h.institution_price||0, value=qty*price;
+                            const ext=extendedTickerData[ticker]||{};
+                            const periodPct=ticker!=='—'?ext[activePeriodField]??null:null;
+                            return (
+                              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:`1px solid ${BORDER_C}` }}>
+                                <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+                                  <CompanyLogo name={name} ticker={ticker!=='—'?ticker:undefined} size={26} radius={6}/>
+                                  <div style={{ minWidth:0 }}>
+                                    <div style={{ fontWeight:700, color:BLUE, fontSize:13 }}>{ticker}</div>
+                                    <div style={{ fontSize:11, color:TEXT2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:140 }}>{name}</div>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign:'right', flexShrink:0 }}>
+                                  <div style={{ fontWeight:600, fontSize:13, fontFamily:'monospace' }}>{fmt(value)}</div>
+                                  {periodPct!=null && <div style={{ fontSize:11, fontWeight:700, color:periodPct>=0?GREEN:RED }}>{periodPct>=0?'▲':'▼'} {Math.abs(periodPct).toFixed(2)}%</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
                       <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-                        <table style={{ width:'100%', borderCollapse:'collapse', minWidth: isMobile ? 0 : 480 }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', minWidth: 480 }}>
                           <thead>
                             <tr style={{ borderBottom:BORDER }}>
                               {['Ticker','Name','Shares','Price','Value','Total Return','Change'].map(col=>(
@@ -10372,6 +10399,7 @@ export default function Dashboard() {
                           </tbody>
                         </table>
                       </div>
+                      )}
                     </>
                   );
 

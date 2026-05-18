@@ -22,7 +22,18 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('pl_token');
+    const uid = user?.id;
+    // Clear user-scoped data so the next user on this browser gets a clean slate
+    const userKeys = uid ? [
+      `pl_calendar_${uid}`, `pl_cat_overrides_${uid}`, `pl_cat_emojis_${uid}`,
+      `pl_tickers_${uid}`, `pl_notif_sent_${uid}`, `pl_prof_tabs_${uid}`,
+      `pl_prof_content_${uid}`, `pl_learn_videos_${uid}`, `pl_layout_order_${uid}`,
+      `pl_hidden_subtabs_${uid}`,
+    ] : [];
+    // Also wipe any legacy non-scoped keys from old sessions
+    const legacyKeys = ['pl_calendar','pl_cat_overrides','pl_cat_emojis','pl_tickers',
+      'pl_notif_sent','pl_prof_tabs','pl_prof_content','pl_learn_videos'];
+    [...userKeys, ...legacyKeys, 'pl_token'].forEach(k => localStorage.removeItem(k));
     setUser(null);
   };
 

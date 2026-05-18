@@ -265,7 +265,14 @@ router.get('/sp500', async (req, res) => {
     if (period === '1d') {
       const todayStr = new Date().toISOString().slice(0, 10);
       const todayOnly = candles.filter(c => c.date.slice(0, 10) === todayStr);
-      if (todayOnly.length) candles = todayOnly;
+      if (todayOnly.length) {
+        candles = todayOnly;
+      } else if (candles.length) {
+        // Weekend or market holiday — fall back to the most recent trading day (like Friday)
+        const dates = [...new Set(candles.map(c => c.date.slice(0, 10)))].sort();
+        const lastDate = dates[dates.length - 1];
+        candles = candles.filter(c => c.date.slice(0, 10) === lastDate);
+      }
     }
     chartCache[cacheKey] = { data: { candles }, ts: Date.now() };
     res.json({ candles });
@@ -349,12 +356,18 @@ router.get('/portfolio-perf', async (req, res) => {
     const toKey  = c => (c.date instanceof Date ? c.date : new Date(c.date)).toISOString().slice(0, interval === '1h' ? 13 : 10);
     const toDate = c => (c.date instanceof Date ? c.date : new Date(c.date)).toISOString().slice(0, 10);
 
-    // For 1D, restrict all chart data to today's trading session only (open to close)
+    // For 1D, restrict all chart data to today's (or most recent) trading session
     if (period === '1d') {
       const todayStr = new Date().toISOString().slice(0, 10);
       Object.keys(charts).forEach(sym => {
         const today = charts[sym].filter(c => toDate(c) === todayStr);
-        if (today.length) charts[sym] = today;
+        if (today.length) { charts[sym] = today; return; }
+        // Weekend or holiday — fall back to most recent trading day
+        if (charts[sym].length) {
+          const dates = [...new Set(charts[sym].map(c => toDate(c)))].sort();
+          const lastDate = dates[dates.length - 1];
+          charts[sym] = charts[sym].filter(c => toDate(c) === lastDate);
+        }
       });
       sp500 = charts['^GSPC'];
       if (!sp500.length) return res.json({ portfolio: [], sp500: [] });

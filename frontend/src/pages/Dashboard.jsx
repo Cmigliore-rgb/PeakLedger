@@ -285,6 +285,11 @@ const NAME_DOMAIN = {
   'wm ':'walmart.com','wholefds':'wholefoodsmarket.com','sq ':'squareup.com',
 };
 
+const LOGO_OVERRIDES = {
+  'capital one': 'https://www.capitalone.com/favicon.ico',
+  'capitalone':  'https://www.capitalone.com/favicon.ico',
+};
+
 function logoUrls(name, ticker, logoUrl) {
   const urls = [];
   if (ticker) {
@@ -298,9 +303,11 @@ function logoUrls(name, ticker, logoUrl) {
     return urls;
   }
   const lower = (name || '').toLowerCase();
+  for (const [k, override] of Object.entries(LOGO_OVERRIDES)) {
+    if (lower.includes(k)) { urls.push(override); break; }
+  }
   for (const [k, d] of Object.entries(NAME_DOMAIN)) {
     if (lower.includes(k)) {
-      // Google favicon is most reliable; Clearbit as secondary
       urls.push(`https://www.google.com/s2/favicons?domain=${d}&sz=128`);
       urls.push(`https://logo.clearbit.com/${d}`);
       return urls;
@@ -3044,12 +3051,12 @@ export default function Dashboard() {
   const [editingGoal, setEditingGoal] = useState(null);
   const [goalForm, setGoalForm] = useState({ name: '', target: '', accountId: '' });
   const [notifPrefs, setNotifPrefs] = useState({ email: '', budgetAlert: true, budgetThreshold: 80, categoryThresholds: {}, goalAlert: true, lowBalanceAlert: true, lowBalanceAmt: 50, emailUnsubscribed: false, weeklyDigest: false });
-  const [categoryEmojis, setCategoryEmojis] = React.useState(() => { try { return JSON.parse(localStorage.getItem('pl_cat_emojis') || '{}'); } catch { return {}; } });
+  const [categoryEmojis, setCategoryEmojis] = React.useState({});
   const [emojiOpen, setEmojiOpen] = React.useState(null);
-  const [txnCategoryOverrides, setTxnCategoryOverrides] = React.useState(() => { try { return JSON.parse(localStorage.getItem('pl_cat_overrides') || '{}'); } catch { return {}; } });
-  const [recatOpen, setRecatOpen] = React.useState(null); // transaction_id of open dropdown
+  const [txnCategoryOverrides, setTxnCategoryOverrides] = React.useState({});
+  const [recatOpen, setRecatOpen] = React.useState(null);
   const resolveCategory = React.useCallback((txn) => { const id = txn.transaction_id; if (id && txnCategoryOverrides[id]) return txnCategoryOverrides[id]; return _resolveCategory(txn); }, [txnCategoryOverrides]);
-  const saveCatOverride = React.useCallback((txnId, category) => { setTxnCategoryOverrides(prev => { const n = { ...prev }; if (category) n[txnId] = category; else delete n[txnId]; localStorage.setItem('pl_cat_overrides', JSON.stringify(n)); return n; }); }, []);
+  const saveCatOverride = React.useCallback((txnId, category) => { setTxnCategoryOverrides(prev => { const n = { ...prev }; if (category) n[txnId] = category; else delete n[txnId]; localStorage.setItem(`pl_cat_overrides_${user?.id}`, JSON.stringify(n)); return n; }); }, [user?.id]); // eslint-disable-line
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifEmailStatus, setNotifEmailStatus] = useState(null);
   const [notifConfigured, setNotifConfigured] = useState(false);
@@ -3063,8 +3070,8 @@ export default function Dashboard() {
   const [backupEmail, setBackupEmail] = useState('');
   const [backupEmailSaved, setBackupEmailSaved] = useState(false);
   const [backupEmailErr, setBackupEmailErr] = useState('');
-  const [profCustomTabs, setProfCustomTabs] = useState(() => { try { return JSON.parse(localStorage.getItem('pl_prof_tabs') || '{}'); } catch { return {}; } });
-  const [profCustomContent, setProfCustomContent] = useState(() => { try { return JSON.parse(localStorage.getItem('pl_prof_content') || '{}'); } catch { return {}; } });
+  const [profCustomTabs, setProfCustomTabs] = useState({});
+  const [profCustomContent, setProfCustomContent] = useState({});
   const [showAddTab, setShowAddTab] = useState(false);
   const [addTabName, setAddTabName] = useState('');
   const [showAddContentModal, setShowAddContentModal] = useState(null);
@@ -3090,7 +3097,7 @@ export default function Dashboard() {
     } catch { return 'essentials'; }
   });
   const [learnExpanded, setLearnExpanded] = useState(new Set());
-  const [learnVideos, setLearnVideos] = useState(() => { try { return JSON.parse(localStorage.getItem('pl_learn_videos') || '{}'); } catch { return {}; } });
+  const [learnVideos, setLearnVideos] = useState({});
   const [yieldCurve, setYieldCurve] = useState({ tenors: [], date: null });
   const [budgetTab, setBudgetTab] = useState('income');
   const [budgetSummaryView, setBudgetSummaryView] = useState(true);
@@ -3126,13 +3133,27 @@ export default function Dashboard() {
   );
   const [toast, setToast] = useState(null);
   const [layoutOrder, setLayoutOrder] = useState(() => { try { return JSON.parse(localStorage.getItem(`pl_layout_order_${user?.id}`) || '{}'); } catch { return {}; } });
-  // Re-load layout order once user ID is known (handles async auth where user?.id is undefined at mount)
+  // Load all user-scoped localStorage data once the user ID is known (async auth)
   useEffect(() => {
     if (!user?.id) return;
-    try {
-      const stored = JSON.parse(localStorage.getItem(`pl_layout_order_${user.id}`) || '{}');
-      if (Object.keys(stored).length) setLayoutOrder(stored);
-    } catch {}
+    const uid = user.id;
+    const get = (key, fallback) => { try { return JSON.parse(localStorage.getItem(`${key}_${uid}`) || JSON.stringify(fallback)); } catch { return fallback; } };
+    const lo = get('pl_layout_order', {});
+    if (Object.keys(lo).length) setLayoutOrder(lo);
+    const emojis = get('pl_cat_emojis', {});
+    if (Object.keys(emojis).length) setCategoryEmojis(emojis);
+    const overrides = get('pl_cat_overrides', {});
+    if (Object.keys(overrides).length) setTxnCategoryOverrides(overrides);
+    const tickers = get('pl_tickers', []);
+    if (tickers.length) setCustomTickers(tickers);
+    const cal = get('pl_calendar', []);
+    if (cal.length) setCalendarEvents(cal);
+    const videos = get('pl_learn_videos', {});
+    if (Object.keys(videos).length) setLearnVideos(videos);
+    const tabs = get('pl_prof_tabs', {});
+    if (Object.keys(tabs).length) setProfCustomTabs(tabs);
+    const content = get('pl_prof_content', {});
+    if (Object.keys(content).length) setProfCustomContent(content);
   }, [user?.id]); // eslint-disable-line
   const getOrder = (key, defaults) => { const s = layoutOrder[key]; if (!s?.length) return defaults; const ss = new Set(s); return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))]; };
   const handleReorder = (key, defaults) => (srcId, tgtId) => { const order = getOrder(key, defaults); const si = order.indexOf(srcId), ti = order.indexOf(tgtId); if (si === -1 || ti === -1 || si === ti) return; const next = [...order]; next.splice(si, 1); next.splice(ti, 0, srcId); setLayoutOrder(prev => ({ ...prev, [key]: next })); };
@@ -3431,7 +3452,7 @@ export default function Dashboard() {
   const [marketViewData, setMarketViewData] = useState([]);
   const [loadingMarketView, setLoadingMarketView] = useState(false);
   const [marketViewError, setMarketViewError] = useState(false);
-  const [customTickers, setCustomTickers]   = useState(() => { try { return JSON.parse(localStorage.getItem('pl_tickers') || '[]'); } catch { return []; } });
+  const [customTickers, setCustomTickers]   = useState([]);
   const [customTickerData, setCustomTickerData] = useState([]);
   const [tickerInput, setTickerInput]       = useState('');
   const [selectedTicker, setSelectedTicker] = useState(null);
@@ -3442,7 +3463,7 @@ export default function Dashboard() {
   const [sectorData, setSectorData]         = useState({});
   const [perfPeriod, setPerfPeriod]         = useState('1y');
   const [perfLoading, setPerfLoading]       = useState(false);
-  const [calendarEvents, setCalendarEvents] = useState(() => { try { return JSON.parse(localStorage.getItem('pl_calendar') || '[]'); } catch { return []; } });
+  const [calendarEvents, setCalendarEvents] = useState([]);
   const [calViewDate, setCalViewDate]       = useState(() => new Date());
   const [showEventForm, setShowEventForm]   = useState(false);
   const [eventForm, setEventForm]           = useState({ title: '', date: '', type: 'reminder', note: '' });
@@ -3623,7 +3644,7 @@ export default function Dashboard() {
     }
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
-  useEffect(() => { localStorage.setItem('pl_calendar', JSON.stringify(calendarEvents)); }, [calendarEvents]);
+  useEffect(() => { if (!user?.id) return; localStorage.setItem(`pl_calendar_${user.id}`, JSON.stringify(calendarEvents)); }, [calendarEvents]); // eslint-disable-line
   useEffect(() => {
     if (!user) return;
     // Check Google Calendar connection status, then auto-sync if connected
@@ -3843,14 +3864,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (!notifPrefs.budgetAlert && !notifPrefs.goalAlert && !notifPrefs.lowBalanceAlert) return;
     const COOLDOWN = 24 * 60 * 60 * 1000;
-    const lastSent = JSON.parse(localStorage.getItem('pl_notif_sent') || '{}');
+    const lastSent = JSON.parse(localStorage.getItem(`pl_notif_sent_${user?.id}`) || '{}');
     const now = Date.now();
     const trigger = async (type, subject, details, key) => {
       if (lastSent[key] && now - lastSent[key] < COOLDOWN) return;
       try {
         await api.post('/notifications/send', { type, subject, details });
         lastSent[key] = now;
-        localStorage.setItem('pl_notif_sent', JSON.stringify(lastSent));
+        localStorage.setItem(`pl_notif_sent_${user?.id}`, JSON.stringify(lastSent));
         api.get('/notifications/inbox').then(r => setInboxNotifs(r.data.notifications || [])).catch(() => {});
       } catch {}
     };
@@ -4568,9 +4589,9 @@ export default function Dashboard() {
       {/* ── SIDEBAR ─────────────────────────────────────── */}
       <aside style={{ width: sidebarCollapsed ? 48 : 220, flexShrink: 0, background: SIDE_BG, borderRight: BORDER, display: isMobile ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.25s ease' }}>
         <div data-tour="brand" style={{ width: sidebarCollapsed ? 48 : 220, padding: sidebarCollapsed ? '12px 0' : '18px 16px 16px', borderBottom: BORDER, display: 'flex', flexDirection: sidebarCollapsed ? 'column' : 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <div style={{ flex: sidebarCollapsed ? 'none' : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: sidebarCollapsed ? 'none' : 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
             <img src={logoSrc} alt="" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0 }} />
-            {!sidebarCollapsed && <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: TEXT }}>PeakLedger</span>}
+            {!sidebarCollapsed && <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>PeakLedger</span>}
           </div>
           {!sidebarCollapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -8160,7 +8181,7 @@ export default function Dashboard() {
                                             'fees': ['💸','📋','🔖','💳','❗','⚠️','🧾','📑'],
                                           };
                                           const opts = PRESETS[b.category?.toLowerCase()] || ['⭐','❤️','🏷️','📌','✨','🎯','💡','🔖'];
-                                          const saveEmoji = (v) => { const n = { ...categoryEmojis }; if (v) n[b.category] = v; else delete n[b.category]; setCategoryEmojis(n); localStorage.setItem('pl_cat_emojis', JSON.stringify(n)); };
+                                          const saveEmoji = (v) => { const n = { ...categoryEmojis }; if (v) n[b.category] = v; else delete n[b.category]; setCategoryEmojis(n); localStorage.setItem(`pl_cat_emojis_${user?.id}`, JSON.stringify(n)); };
                                           return (
                                             <div style={{ position: 'absolute', left: 0, top: '100%', zIndex: 200, background: CARD_BG, border: BORDER, borderRadius: 10, padding: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.35)', marginTop: 4, minWidth: 228 }}>
                                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -10088,7 +10109,7 @@ export default function Dashboard() {
                             if (!customTickers.includes(sym)) {
                               const next = [...customTickers, sym];
                               setCustomTickers(next);
-                              localStorage.setItem('pl_tickers', JSON.stringify(next));
+                              localStorage.setItem(`pl_tickers_${user?.id}`, JSON.stringify(next));
                               fetchMarketView('your_list', next);
                             }
                             setTickerInput('');
@@ -10101,7 +10122,7 @@ export default function Dashboard() {
                         if (sym && !customTickers.includes(sym)) {
                           const next = [...customTickers, sym];
                           setCustomTickers(next);
-                          localStorage.setItem('pl_tickers', JSON.stringify(next));
+                          localStorage.setItem(`pl_tickers_${user?.id}`, JSON.stringify(next));
                           fetchMarketView('your_list', next);
                         }
                         setTickerInput('');
@@ -10154,7 +10175,7 @@ export default function Dashboard() {
                                   <button onClick={() => {
                                     const next = customTickers.filter(s => s !== t.symbol);
                                     setCustomTickers(next);
-                                    localStorage.setItem('pl_tickers', JSON.stringify(next));
+                                    localStorage.setItem(`pl_tickers_${user?.id}`, JSON.stringify(next));
                                     setCustomTickerData(prev => prev.filter(q => q.symbol !== t.symbol));
                                   }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 14, padding: 0 }}>✕</button>
                                 )}
@@ -10200,7 +10221,7 @@ export default function Dashboard() {
                                     <button onClick={() => {
                                       const next = customTickers.filter(s => s !== t.symbol);
                                       setCustomTickers(next);
-                                      localStorage.setItem('pl_tickers', JSON.stringify(next));
+                                      localStorage.setItem(`pl_tickers_${user?.id}`, JSON.stringify(next));
                                       setCustomTickerData(prev => prev.filter(q => q.symbol !== t.symbol));
                                     }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 14, padding: 0 }}>✕</button>
                                   </td>
@@ -10734,7 +10755,7 @@ export default function Dashboard() {
                                           onChange={e => {
                                             const next = { ...learnVideos, [item.id]: e.target.value };
                                             setLearnVideos(next);
-                                            localStorage.setItem('pl_learn_videos', JSON.stringify(next));
+                                            localStorage.setItem(`pl_learn_videos_${user?.id}`, JSON.stringify(next));
                                           }}
                                           style={{ flex: 1, padding: '7px 10px', background: DARK, border: BORDER, borderRadius: 6, color: TEXT2, fontSize: 12, outline: 'none' }}
                                         />
@@ -10742,7 +10763,7 @@ export default function Dashboard() {
                                           <button onClick={() => {
                                             const next = { ...learnVideos, [item.id]: '' };
                                             setLearnVideos(next);
-                                            localStorage.setItem('pl_learn_videos', JSON.stringify(next));
+                                            localStorage.setItem(`pl_learn_videos_${user?.id}`, JSON.stringify(next));
                                           }} style={{ padding: '6px 10px', background: 'none', border: BORDER, borderRadius: 6, color: TEXT3, fontSize: 12, cursor: 'pointer' }}>
                                             Remove
                                           </button>
@@ -13519,7 +13540,7 @@ export default function Dashboard() {
                                           <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', background: DARK, borderRadius: 7, border: BORDER }}>
                                             <span style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', background: 'rgba(167,139,250,0.12)', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>Custom</span>
                                             <span style={{ flex: 1, fontSize: 13 }}>{item.title}{item.description && <span style={{ fontSize: 11, color: TEXT3, marginLeft: 8 }}>{item.description}</span>}</span>
-                                            <button onClick={() => { const ck = `${selectedCourseId}_slides`; const updated = { ...profCustomContent, [ck]: (profCustomContent[ck] || []).filter(i => i.id !== item.id) }; setProfCustomContent(updated); localStorage.setItem('pl_prof_content', JSON.stringify(updated)); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                                            <button onClick={() => { const ck = `${selectedCourseId}_slides`; const updated = { ...profCustomContent, [ck]: (profCustomContent[ck] || []).filter(i => i.id !== item.id) }; setProfCustomContent(updated); localStorage.setItem(`pl_prof_content_${user?.id}`, JSON.stringify(updated)); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
                                           </div>
                                         ))}
                                       </div>
@@ -13581,7 +13602,7 @@ export default function Dashboard() {
                                         {(profCustomTabs[selectedCourseId] || []).map(t => (
                                           <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: DARK, border: BORDER, borderRadius: 8 }}>
                                             <span style={{ fontSize: 13 }}>{t.label}</span>
-                                            <button onClick={() => { const updated = { ...profCustomTabs, [selectedCourseId]: (profCustomTabs[selectedCourseId] || []).filter(x => x.key !== t.key) }; setProfCustomTabs(updated); localStorage.setItem('pl_prof_tabs', JSON.stringify(updated)); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                                            <button onClick={() => { const updated = { ...profCustomTabs, [selectedCourseId]: (profCustomTabs[selectedCourseId] || []).filter(x => x.key !== t.key) }; setProfCustomTabs(updated); localStorage.setItem(`pl_prof_tabs_${user?.id}`, JSON.stringify(updated)); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
                                           </div>
                                         ))}
                                       </div>
@@ -13620,7 +13641,7 @@ export default function Dashboard() {
                                                     {item.url && <div style={{ fontSize: 11, color: BLUE, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.url}</div>}
                                                     {item.description && <div style={{ fontSize: 11, color: TEXT3, marginTop: 1 }}>{item.description}</div>}
                                                   </div>
-                                                  <button onClick={() => { const updated = { ...profCustomContent, [ck]: items.filter(i => i.id !== item.id) }; setProfCustomContent(updated); localStorage.setItem('pl_prof_content', JSON.stringify(updated)); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                                                  <button onClick={() => { const updated = { ...profCustomContent, [ck]: items.filter(i => i.id !== item.id) }; setProfCustomContent(updated); localStorage.setItem(`pl_prof_content_${user?.id}`, JSON.stringify(updated)); }} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
                                                 </div>
                                               ))}
                                             </div>
@@ -18791,10 +18812,10 @@ export default function Dashboard() {
           <div style={{ background: CARD_BG, borderRadius: 16, padding: 28, width: 360, border: BORDER }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 18 }}>Add Content Tab</div>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Tab Name</label>
-            <input autoFocus value={addTabName} onChange={e => setAddTabName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && addTabName.trim()) { const key = addTabName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''); const updated = { ...profCustomTabs, [selectedCourseId]: [...(profCustomTabs[selectedCourseId] || []), { key, label: addTabName.trim() }] }; setProfCustomTabs(updated); localStorage.setItem('pl_prof_tabs', JSON.stringify(updated)); setContentFolder(key); setShowAddTab(false); } }} placeholder="e.g. Videos, Links, Notes" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: BORDER, background: DARK, color: TEXT, fontSize: 13, marginBottom: 20, boxSizing: 'border-box' }} />
+            <input autoFocus value={addTabName} onChange={e => setAddTabName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && addTabName.trim()) { const key = addTabName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''); const updated = { ...profCustomTabs, [selectedCourseId]: [...(profCustomTabs[selectedCourseId] || []), { key, label: addTabName.trim() }] }; setProfCustomTabs(updated); localStorage.setItem(`pl_prof_tabs_${user?.id}`, JSON.stringify(updated)); setContentFolder(key); setShowAddTab(false); } }} placeholder="e.g. Videos, Links, Notes" style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: BORDER, background: DARK, color: TEXT, fontSize: 13, marginBottom: 20, boxSizing: 'border-box' }} />
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setShowAddTab(false)} style={{ flex: 1, padding: '9px 0', background: MUTED, border: BORDER, borderRadius: 8, color: TEXT2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button disabled={!addTabName.trim()} onClick={() => { const key = addTabName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''); const updated = { ...profCustomTabs, [selectedCourseId]: [...(profCustomTabs[selectedCourseId] || []), { key, label: addTabName.trim() }] }; setProfCustomTabs(updated); localStorage.setItem('pl_prof_tabs', JSON.stringify(updated)); setContentFolder(key); setShowAddTab(false); }} style={{ flex: 1, padding: '9px 0', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: GREEN, fontSize: 13, fontWeight: 700, cursor: addTabName.trim() ? 'pointer' : 'not-allowed', opacity: addTabName.trim() ? 1 : 0.5 }}>Add Tab</button>
+              <button disabled={!addTabName.trim()} onClick={() => { const key = addTabName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''); const updated = { ...profCustomTabs, [selectedCourseId]: [...(profCustomTabs[selectedCourseId] || []), { key, label: addTabName.trim() }] }; setProfCustomTabs(updated); localStorage.setItem(`pl_prof_tabs_${user?.id}`, JSON.stringify(updated)); setContentFolder(key); setShowAddTab(false); }} style={{ flex: 1, padding: '9px 0', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: GREEN, fontSize: 13, fontWeight: 700, cursor: addTabName.trim() ? 'pointer' : 'not-allowed', opacity: addTabName.trim() ? 1 : 0.5 }}>Add Tab</button>
             </div>
           </div>
         </div>
@@ -18871,7 +18892,7 @@ export default function Dashboard() {
             ))}
             <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
               <button onClick={() => setShowAddContentModal(null)} style={{ flex: 1, padding: '9px 0', background: MUTED, border: BORDER, borderRadius: 8, color: TEXT2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button disabled={!addContentForm.title.trim()} onClick={() => { const ck = `${showAddContentModal.courseId}_${showAddContentModal.folder}`; const item = { id: Date.now().toString(), title: addContentForm.title.trim(), url: addContentForm.url.trim(), description: addContentForm.description.trim() }; const updated = { ...profCustomContent, [ck]: [...(profCustomContent[ck] || []), item] }; setProfCustomContent(updated); localStorage.setItem('pl_prof_content', JSON.stringify(updated)); setShowAddContentModal(null); }} style={{ flex: 1, padding: '9px 0', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: GREEN, fontSize: 13, fontWeight: 700, cursor: addContentForm.title.trim() ? 'pointer' : 'not-allowed', opacity: addContentForm.title.trim() ? 1 : 0.5 }}>Add Item</button>
+              <button disabled={!addContentForm.title.trim()} onClick={() => { const ck = `${showAddContentModal.courseId}_${showAddContentModal.folder}`; const item = { id: Date.now().toString(), title: addContentForm.title.trim(), url: addContentForm.url.trim(), description: addContentForm.description.trim() }; const updated = { ...profCustomContent, [ck]: [...(profCustomContent[ck] || []), item] }; setProfCustomContent(updated); localStorage.setItem(`pl_prof_content_${user?.id}`, JSON.stringify(updated)); setShowAddContentModal(null); }} style={{ flex: 1, padding: '9px 0', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: GREEN, fontSize: 13, fontWeight: 700, cursor: addContentForm.title.trim() ? 'pointer' : 'not-allowed', opacity: addContentForm.title.trim() ? 1 : 0.5 }}>Add Item</button>
             </div>
           </div>
         </div>

@@ -3959,8 +3959,8 @@ export default function Dashboard() {
       const manualTickers = rawManual.filter(m => m.ticker).map(m => m.ticker);
       if (manualTickers.length > 0) {
         try {
-          const pr = await api.get('/market/tickers', { params: { tickers: manualTickers.join(',') } });
-          (pr.data.quotes || []).forEach(q => { manualPriceMap[q.symbol] = q.regularMarketPrice; });
+          const pr = await api.get('/market/quotes', { params: { symbols: manualTickers.join(',') } });
+          (pr.data.quotes || []).forEach(q => { if (q.price) manualPriceMap[q.symbol] = q.price; });
         } catch {}
       }
       const manualHoldingsFormatted = rawManual.map(m => {
@@ -4026,7 +4026,7 @@ export default function Dashboard() {
       // Exclude credit-type accounts — their debt is already captured in totalLiab from /liabilities
       // Exclude investment accounts — portfolio from holdings is the authoritative source
       const cash      = allAccounts.filter(a => a.type !== 'investment' && a.type !== 'credit').reduce((s, a) => s + (a.balances?.current || 0), 0);
-      const portfolio = allHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
+      const portfolio = [...plaidHoldings, ...manualHoldingsFormatted].reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
       const liabData  = liabRes.status === 'fulfilled' ? liabRes.value.data : {};
       const totalLiab = [
         ...(liabData.credit   || []),
@@ -7188,7 +7188,15 @@ export default function Dashboard() {
 
               return (
                 <div>
-                  <h1 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: 700 }}>Banking</h1>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Banking</h1>
+                    {isPremium && (
+                      <button onClick={() => setPanel('settings')}
+                        style={{ padding: '7px 14px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: GREEN, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        + Manual Account
+                      </button>
+                    )}
+                  </div>
                   {SandboxBanner}
                   {canSeeAI && <AIInsightCard isDemoData={false} demoKey={null} onGetAdvice={() => getAdvice('banking')} loading={adviceState.banking?.loading} text={adviceState.banking?.text} />}
                   {activeAccounts.length === 0 ? (
@@ -7281,9 +7289,9 @@ export default function Dashboard() {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                       {c._manual && <button onClick={() => setLiabModal({ id: c._id, type: 'credit', name, balance: bal, interest_rate: apr ?? '', minimum_payment: minPmt ?? '', credit_limit: limit ?? '', due_day: '' })} style={{ background: 'transparent', border: 'none', color: TEXT2, fontSize: 11, cursor: 'pointer', padding: 0 }}>Edit</button>}
                                       {c._manual && <button onClick={() => deleteLiability(c._id)} style={{ background: 'transparent', border: 'none', color: RED, fontSize: 11, cursor: 'pointer', padding: 0 }}>Remove</button>}
+                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                     </div>
                                   </div>
                                   {limit && (
@@ -7323,9 +7331,9 @@ export default function Dashboard() {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                       {s._manual && <button onClick={() => setLiabModal({ id: s._id, type: 'student', name, balance: bal, interest_rate: rate ?? '', minimum_payment: minPmt ?? '', credit_limit: '', due_day: '' })} style={{ background: 'transparent', border: 'none', color: TEXT2, fontSize: 11, cursor: 'pointer', padding: 0 }}>Edit</button>}
                                       {s._manual && <button onClick={() => deleteLiability(s._id)} style={{ background: 'transparent', border: 'none', color: RED, fontSize: 11, cursor: 'pointer', padding: 0 }}>Remove</button>}
+                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                     </div>
                                   </div>
                                   {pct != null && (
@@ -7365,9 +7373,9 @@ export default function Dashboard() {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                       {m._manual && <button onClick={() => setLiabModal({ id: m._id, type: 'mortgage', name, balance: bal, interest_rate: rate ?? '', minimum_payment: nextPmt ?? '', credit_limit: '', due_day: '' })} style={{ background: 'transparent', border: 'none', color: TEXT2, fontSize: 11, cursor: 'pointer', padding: 0 }}>Edit</button>}
                                       {m._manual && <button onClick={() => deleteLiability(m._id)} style={{ background: 'transparent', border: 'none', color: RED, fontSize: 11, cursor: 'pointer', padding: 0 }}>Remove</button>}
+                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                     </div>
                                   </div>
                                   {pct != null && (
@@ -7404,9 +7412,9 @@ export default function Dashboard() {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div style={{ fontSize: 13, fontWeight: 600 }}>{name}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                       {c._manual && <button onClick={() => setLiabModal({ id: c._id, type: 'car', name, balance: bal, interest_rate: rate ?? '', minimum_payment: minPmt ?? '', credit_limit: '', due_day: '' })} style={{ background: 'transparent', border: 'none', color: TEXT2, fontSize: 11, cursor: 'pointer', padding: 0 }}>Edit</button>}
                                       {c._manual && <button onClick={() => deleteLiability(c._id)} style={{ background: 'transparent', border: 'none', color: RED, fontSize: 11, cursor: 'pointer', padding: 0 }}>Remove</button>}
+                                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(bal)}</div>
                                     </div>
                                   </div>
                                   <div style={{ display: 'flex', gap: 20, fontSize: 12, color: TEXT2 }}>

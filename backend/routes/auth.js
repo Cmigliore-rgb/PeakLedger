@@ -32,6 +32,7 @@ const safeUser = (u, enrollments = []) => ({
   email_verified: !!u.email_verified, created_at: u.created_at, enrollments,
   backup_email: u.backup_email || null,
   two_factor_enabled: !!u.two_factor_enabled,
+  promo_redeemed: !!u.promo_code_redeemed,
 });
 
 const APP_URL = process.env.FRONTEND_URL || 'https://peakledger.app';
@@ -189,7 +190,7 @@ router.post('/2fa/disable', requireAuth, (req, res) => {
 });
 
 router.get('/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, email, name, role, tier, email_verified, backup_email, created_at FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, email, name, role, tier, email_verified, backup_email, created_at, two_factor_enabled, promo_code_redeemed FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const enrollments = getEnrollments(user.id);
   res.json({ user: safeUser(user, enrollments) });
@@ -674,6 +675,56 @@ router.post('/admin/professor-code/regenerate', requireAuth, (req, res) => {
   const code = 'PROF-' + crypto.randomBytes(3).toString('hex').toUpperCase();
   db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('professor_invite_code', ?)").run(code);
   res.json({ code });
+});
+
+// ── Promo code (admin management) ─────────────────────────────────────────
+function getPromoCode() {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'promo_code'").get();
+  return row ? row.value : null;
+}
+
+router.get('/admin/promo-code', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  res.json({ code: getPromoCode() });
+});
+
+router.post('/admin/promo-code', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const code = req.body.code?.trim().toUpperCase();
+  if (!code || code.length < 4) return res.status(400).json({ error: 'Code must be at least 4 characters' });
+  db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('promo_code', ?)").run(code);
+  res.json({ code });
+});
+
+router.post('/admin/promo-code/regenerate', requireAuth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const code = 'PROMO-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+  db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('promo_code', ?)").run(code);
+  res.json({ code });
+});
+
+// ── Promo code redemption (any user) ──────────────────────────────────────
+router.post('/promo/redeem', requireAuth, (req, res) => {
+  const u = db.prepare('SELECT id, tier, promo_code_redeemed FROM users WHERE id = ?').get(req.user.id);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  if (u.promo_code_redeemed) return res.status(400).json({ error: 'You have already redeemed a promo code.' });
+
+  const submitted = req.body.code?.trim().toUpperCase();
+  if (!submitted) return res.status(400).json({ error: 'Code is required.' });
+
+  const current = getPromoCode();
+  if (!current) return res.status(400).json({ error: 'No active promo code at this time.' });
+  if (submitted !== current) return res.status(400).json({ error: 'Invalid promo code.' });
+
+  db.prepare('UPDATE users SET tier = ?, promo_code_redeemed = ? WHERE id = ?').run('premium', submitted, req.user.id);
+  const updated = db.prepare('SELECT id, name, email, role, tier, two_factor_enabled, backup_email, email_verified, promo_code_redeemed FROM users WHERE id = ?').get(req.user.id);
+  const token = require('jsonwebtoken').sign({ id: updated.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  res.json({ ok: true, token, user: updated });
+});
+
+router.get('/promo/status', requireAuth, (req, res) => {
+  const u = db.prepare('SELECT promo_code_redeemed FROM users WHERE id = ?').get(req.user.id);
+  res.json({ redeemed: !!u?.promo_code_redeemed });
 });
 
 // Admin: set any user's tier

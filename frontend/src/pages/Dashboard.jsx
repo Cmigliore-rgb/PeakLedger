@@ -3193,7 +3193,7 @@ function useCountUp(target, duration = 700) {
 }
 
 export default function Dashboard() {
-  const { user, logout, refreshUser, isPremium, isProfessor, isAdmin, isStudent, isUser } = useAuth();
+  const { user, login, logout, refreshUser, isPremium, isProfessor, isAdmin, isStudent, isUser } = useAuth();
   const [panel, setPanel] = useState(() => localStorage.getItem(`pl_panel_${user?.id}`) || 'overview');
   const [accounts, setAccounts] = useState([]);
   const [isDemoData, setIsDemoData] = useState(false);
@@ -3678,6 +3678,13 @@ export default function Dashboard() {
   const [profCodeInput, setProfCodeInput] = useState('');
   const [profCodeSaving, setProfCodeSaving] = useState(false);
   const [profCodeMsg, setProfCodeMsg] = useState('');
+  const [promoCode, setPromoCode] = useState(null);
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [promoCodeSaving, setPromoCodeSaving] = useState(false);
+  const [promoCodeMsg, setPromoCodeMsg] = useState('');
+  const [promoRedeemInput, setPromoRedeemInput] = useState('');
+  const [promoRedeemStatus, setPromoRedeemStatus] = useState(null);
+  const [promoRedeemSaving, setPromoRedeemSaving] = useState(false);
   const fetchAdminUsers = async () => {
     setAdminUsersLoading(true);
     try { const r = await api.get('/auth/users'); setAdminUsers(r.data.users || []); }
@@ -9897,14 +9904,14 @@ export default function Dashboard() {
                     NEE:'Utilities',SO:'Utilities',DUK:'Utilities',AEP:'Utilities',
                   };
                   const SECTOR_COLORS = {
-                    'Technology':'#4da3ff','Healthcare':'#34d399','Financial Services':'#a78bfa',
+                    'Technology':'#818cf8','Healthcare':'#34d399','Financial Services':'#fbbf24',
                     'Consumer Cyclical':'#fb923c','Consumer Defensive':'#22d3ee','Energy':'#f87171',
-                    'Industrials':'#94a3b8','Basic Materials':'#c8a97e','Real Estate':'#f472b6',
-                    'Communication Services':'#60a5fa','Utilities':'#facc15',
-                    'Broad Market':'#6ee7b7','Bonds':'#fbbf24','Commodities':'#d97706',
-                    'International':'#c084fc','Emerging Markets':'#e879f9','Other':'#4b5563',
+                    'Industrials':'#60a5fa','Basic Materials':'#d97706','Real Estate':'#f472b6',
+                    'Communication Services':'#a78bfa','Utilities':'#facc15',
+                    'Broad Market':'#4ade80','Bonds':'#fb923c','Commodities':'#c8a97e',
+                    'International':'#c084fc','Emerging Markets':'#e879f9','Other':'#6b7280',
                   };
-                  const TYPE_COLORS = { stocks:'#4da3ff', etf:'#34d399', bonds:'#fbbf24', crypto:'#fb923c', cash:'#94a3b8' };
+                  const TYPE_COLORS = { stocks:'#818cf8', etf:'#34d399', bonds:'#fb923c', crypto:'#f472b6', cash:'#22d3ee' };
                   const INV_TABS = [
                     { key:'stocks', label:'Stocks' },
                     { key:'etf',   label:'ETFs'  },
@@ -10247,12 +10254,12 @@ export default function Dashboard() {
 
                       {/* Pie + holdings grid */}
                       {activeHoldings.length>0 ? (
-                        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'200px 1fr', gap:16, marginBottom:16, alignItems:'start' }}>
+                        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1.6fr', gap:16, marginBottom:16, alignItems:'start' }}>
                           {/* Donut */}
                           <div className="lc" style={{ ...CARD, display:'flex', flexDirection:'column', alignItems:'center', gap:12, padding:'20px 16px' }}>
                             <div style={{ fontWeight:600, fontSize:13, alignSelf:'flex-start' }}>Allocation</div>
                             {pieSlices.length>0 ? <>
-                              {PieDonut({ slices:pieSlices, size:140 })}
+                              {PieDonut({ slices:pieSlices, size:160 })}
                               <div style={{ display:'flex', flexDirection:'column', gap:7, width:'100%' }}>
                                 {pieSlices.map(s=>(
                                   <div key={s.label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -12320,6 +12327,59 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {!isAdmin && !isProfessor && !user?.promo_redeemed && (
+                  <div style={{ ...CARD, marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Promo Code</div>
+                    <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Have a promo code? Enter it below for permanent premium access.</div>
+                    {promoRedeemStatus === 'success' ? (
+                      <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 8, fontSize: 13, color: GREEN }}>
+                        Premium unlocked. Welcome to PeakLedger Pro.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            value={promoRedeemInput}
+                            onChange={e => { setPromoRedeemInput(e.target.value.toUpperCase()); setPromoRedeemStatus(null); }}
+                            placeholder="Enter code..."
+                            style={{ flex: 1, padding: '9px 12px', background: MUTED, border: promoRedeemStatus === 'error' ? '1px solid rgba(248,113,113,0.5)' : BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', fontFamily: 'monospace', letterSpacing: '1px', textTransform: 'uppercase' }}
+                          />
+                          <button
+                            disabled={promoRedeemSaving || !promoRedeemInput.trim()}
+                            onClick={async () => {
+                              setPromoRedeemSaving(true); setPromoRedeemStatus(null);
+                              try {
+                                const r = await api.post('/auth/promo/redeem', { code: promoRedeemInput.trim() });
+                                if (r.data.token && r.data.user) login(r.data.token, r.data.user);
+                                setPromoRedeemStatus('success');
+                              } catch (err) {
+                                setPromoRedeemStatus(err.response?.data?.error || 'Invalid code. Please try again.');
+                              } finally { setPromoRedeemSaving(false); }
+                            }}
+                            style={{ padding: '9px 18px', background: BLUE_BTN, border: 'none', borderRadius: 7, color: '#fff', fontSize: 13, fontWeight: 600, cursor: (promoRedeemSaving || !promoRedeemInput.trim()) ? 'default' : 'pointer', opacity: (promoRedeemSaving || !promoRedeemInput.trim()) ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                            {promoRedeemSaving ? 'Checking...' : 'Redeem'}
+                          </button>
+                        </div>
+                        {promoRedeemStatus && promoRedeemStatus !== 'success' && (
+                          <div style={{ fontSize: 12, color: RED }}>{promoRedeemStatus}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {user?.promo_redeemed && !isAdmin && !isProfessor && (
+                  <div style={{ ...CARD, marginBottom: 16, border: '1px solid rgba(74,222,128,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14, color: GREEN }}>✓</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: GREEN }}>Promo Code Redeemed</div>
+                        <div style={{ fontSize: 12, color: TEXT2, marginTop: 2 }}>Your premium access is permanent and won't be affected by code changes.</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ ...CARD, marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Appearance</div>
                   <div style={{ fontSize: 13, color: TEXT2, marginBottom: 20 }}>Color scheme and accent color.</div>
@@ -12580,6 +12640,70 @@ export default function Dashboard() {
                         </div>
                         {profCodeMsg && !['Copied!', 'Saved!', 'Regenerated!'].includes(profCodeMsg) && (
                           <div style={{ marginTop: 8, fontSize: 12, color: '#f87171' }}>{profCodeMsg}</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div style={{ ...CARD, marginBottom: 16, border: `1px solid rgba(167,139,250,0.25)` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>Promo Code</div>
+                      <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: 'rgba(167,139,250,0.12)', color: '#a78bfa' }}>Admin Only</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Users who enter this code get permanent premium access. Changing the code doesn't affect users who already redeemed it.</div>
+                    {promoCode === null ? (
+                      <button onClick={async () => {
+                        try { const r = await api.get('/auth/admin/promo-code'); setPromoCode(r.data.code || ''); setPromoCodeInput(r.data.code || ''); }
+                        catch { setPromoCode(''); }
+                      }} style={{ padding: '8px 16px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        Show Current Code
+                      </button>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ flex: 1, padding: '10px 14px', background: DARK, border: BORDER, borderRadius: 8, fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: promoCode ? TEXT : TEXT3, letterSpacing: '2px' }}>
+                            {promoCode || 'No code set'}
+                          </div>
+                          {promoCode && (
+                            <button onClick={() => { navigator.clipboard.writeText(promoCode); setPromoCodeMsg('Copied!'); setTimeout(() => setPromoCodeMsg(''), 2000); }}
+                              style={{ padding: '10px 14px', background: MUTED, border: BORDER, borderRadius: 8, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              {promoCodeMsg === 'Copied!' ? 'Copied!' : 'Copy'}
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input value={promoCodeInput} onChange={e => setPromoCodeInput(e.target.value.toUpperCase())}
+                            placeholder="Set a custom code..."
+                            style={{ flex: 1, padding: '9px 12px', background: DARK, border: BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace', letterSpacing: '1px' }}
+                          />
+                          <button disabled={promoCodeSaving || !promoCodeInput.trim() || promoCodeInput.trim() === promoCode}
+                            onClick={async () => {
+                              setPromoCodeSaving(true);
+                              try { const r = await api.post('/auth/admin/promo-code', { code: promoCodeInput }); setPromoCode(r.data.code); setPromoCodeMsg('Saved!'); setTimeout(() => setPromoCodeMsg(''), 2000); }
+                              catch (e) { setPromoCodeMsg(e.response?.data?.error || 'Error'); setTimeout(() => setPromoCodeMsg(''), 3000); }
+                              finally { setPromoCodeSaving(false); }
+                            }}
+                            style={{ padding: '9px 14px', background: BLUE_BTN, border: 'none', borderRadius: 7, color: '#fff', fontSize: 13, fontWeight: 600, cursor: (promoCodeSaving || !promoCodeInput.trim() || promoCodeInput.trim() === promoCode) ? 'default' : 'pointer', opacity: (promoCodeSaving || !promoCodeInput.trim() || promoCodeInput.trim() === promoCode) ? 0.5 : 1 }}>
+                            Save
+                          </button>
+                          <button disabled={promoCodeSaving}
+                            onClick={async () => {
+                              setPromoCodeSaving(true);
+                              try { const r = await api.post('/auth/admin/promo-code/regenerate'); setPromoCode(r.data.code); setPromoCodeInput(r.data.code); setPromoCodeMsg('Regenerated!'); setTimeout(() => setPromoCodeMsg(''), 2000); }
+                              catch { setPromoCodeMsg('Error'); setTimeout(() => setPromoCodeMsg(''), 3000); }
+                              finally { setPromoCodeSaving(false); }
+                            }}
+                            style={{ padding: '9px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 13, fontWeight: 600, cursor: promoCodeSaving ? 'default' : 'pointer', opacity: promoCodeSaving ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                            Regen
+                          </button>
+                        </div>
+                        {promoCodeMsg && !['Copied!', 'Saved!', 'Regenerated!'].includes(promoCodeMsg) && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: RED }}>{promoCodeMsg}</div>
+                        )}
+                        {['Saved!', 'Regenerated!'].includes(promoCodeMsg) && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: GREEN }}>{promoCodeMsg}</div>
                         )}
                       </>
                     )}

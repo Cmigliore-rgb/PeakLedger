@@ -52,7 +52,7 @@ export default function Login() {
   useEffect(() => {
     if (localStorage.getItem('pl_token')) return;
     if (typeof navigator.credentials?.get !== 'function') return;
-    navigator.credentials.get({ password: true, mediation: 'silent' })
+    navigator.credentials.get({ password: true, mediation: 'optional' })
       .then(cred => {
         if (!cred || cred.type !== 'password') return;
         setLoading(true);

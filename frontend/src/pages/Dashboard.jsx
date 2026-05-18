@@ -3835,16 +3835,21 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { if (cmdOpen) setTimeout(() => cmdInputRef.current?.focus(), 30); }, [cmdOpen]);
 
-  // Show onboarding when redirected here from registration
+  // Show onboarding for new users (account < 24h old) or via ?onboarding=1 param
   useEffect(() => {
+    if (!user?.id) return;
+    const alreadyDone = localStorage.getItem(`pl_onboarded_${user.id}`);
+    if (alreadyDone) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('onboarding') === '1') {
       setShowOnboarding(true);
       params.delete('onboarding');
-      const clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-      window.history.replaceState({}, '', clean);
+      window.history.replaceState({}, '', window.location.pathname + (params.toString() ? '?' + params.toString() : ''));
+      return;
     }
-  }, []);
+    const ageMs = user.created_at ? Date.now() - new Date(user.created_at).getTime() : Infinity;
+    if (ageMs < 24 * 60 * 60 * 1000) setShowOnboarding(true);
+  }, [user?.id]);
 
   // Handle return from Stripe checkout or email verification
   useEffect(() => {

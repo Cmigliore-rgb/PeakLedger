@@ -17,7 +17,7 @@ function inferRole(email) {
 const sign = (user) => jwt.sign(
   { id: user.id, email: user.email, role: user.role, tier: user.tier },
   process.env.JWT_SECRET,
-  { expiresIn: '7d' }
+  { expiresIn: '30d' }
 );
 
 const getEnrollments = (userId) =>
@@ -271,8 +271,27 @@ router.patch('/me', requireAuth, (req, res) => {
   }
 });
 
+async function updateStripeToStudentPrice(user) {
+  const studentPrice = process.env.STRIPE_PRICE_STUDENT;
+  if (!studentPrice || !user.stripe_subscription_id || !process.env.STRIPE_SECRET_KEY) return;
+  try {
+    const Stripe = require('stripe');
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+    const sub = await stripe.subscriptions.retrieve(user.stripe_subscription_id);
+    const item = sub.items.data[0];
+    if (!item || item.price.id === studentPrice) return;
+    await stripe.subscriptions.update(user.stripe_subscription_id, {
+      items: [{ id: item.id, price: studentPrice }],
+      proration_behavior: 'create_prorations',
+    });
+    console.log(`[stripe] user=${user.id} subscription updated to student price`);
+  } catch (err) {
+    console.error('[stripe] student price sync error:', err.message);
+  }
+}
+
 // Email verification
-router.get('/verify-email', (req, res) => {
+router.get('/verify-email', async (req, res) => {
   const { token } = req.query;
   if (!token) return res.redirect(`${APP_URL}/login?verify_error=1`);
   const user = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token);
@@ -280,8 +299,10 @@ router.get('/verify-email', (req, res) => {
   const isEdu = user.email.toLowerCase().endsWith('.edu');
   if (isEdu && user.role === 'user') {
     db.prepare("UPDATE users SET email_verified = 1, verification_token = NULL, role = 'student', edu_verified_at = datetime('now') WHERE id = ?").run(user.id);
+    updateStripeToStudentPrice(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id));
   } else if (isEdu) {
     db.prepare("UPDATE users SET email_verified = 1, verification_token = NULL, edu_verified_at = datetime('now'), reverification_sent_at = NULL WHERE id = ?").run(user.id);
+    updateStripeToStudentPrice(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id));
   } else {
     db.prepare('UPDATE users SET email_verified = 1, verification_token = NULL WHERE id = ?').run(user.id);
   }
@@ -553,6 +574,17 @@ router.post('/google', async (req, res) => {
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     }
 
+    // Promote .edu accounts to student and sync Stripe price
+    if (email.toLowerCase().endsWith('.edu') && (user.role === 'user' || user.role === 'student')) {
+      if (user.role === 'user') {
+        db.prepare("UPDATE users SET role = 'student', edu_verified_at = datetime('now') WHERE id = ?").run(user.id);
+      } else {
+        db.prepare("UPDATE users SET edu_verified_at = datetime('now') WHERE id = ?").run(user.id);
+      }
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+      updateStripeToStudentPrice(user);
+    }
+
     const enrollments = getEnrollments(user.id);
     res.json({ token: sign(user), user: safeUser(user, enrollments) });
   } catch (err) {
@@ -641,6 +673,17 @@ router.post('/microsoft', async (req, res) => {
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     }
 
+    // Promote .edu accounts to student and sync Stripe price
+    if (userEmail && userEmail.endsWith('.edu') && (user.role === 'user' || user.role === 'student')) {
+      if (user.role === 'user') {
+        db.prepare("UPDATE users SET role = 'student', edu_verified_at = datetime('now') WHERE id = ?").run(user.id);
+      } else {
+        db.prepare("UPDATE users SET edu_verified_at = datetime('now') WHERE id = ?").run(user.id);
+      }
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+      updateStripeToStudentPrice(user);
+    }
+
     const enrollments = getEnrollments(user.id);
     res.json({ token: sign(user), user: safeUser(user, enrollments) });
   } catch (err) {
@@ -704,22 +747,62 @@ router.post('/admin/promo-code/regenerate', requireAuth, (req, res) => {
 });
 
 // ── Promo code redemption (any user) ──────────────────────────────────────
-router.post('/promo/redeem', requireAuth, (req, res) => {
-  const u = db.prepare('SELECT id, tier, promo_code_redeemed FROM users WHERE id = ?').get(req.user.id);
-  if (!u) return res.status(404).json({ error: 'User not found' });
-  if (u.promo_code_redeemed) return res.status(400).json({ error: 'You have already redeemed a promo code.' });
+router.post('/promo/redeem', requireAuth, async (req, res) => {
+  try {
+    const u = db.prepare('SELECT id, tier, promo_code_redeemed, stripe_customer_id, email, name, role FROM users WHERE id = ?').get(req.user.id);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    if (u.promo_code_redeemed) return res.status(400).json({ error: 'You have already redeemed a promo code.' });
+    if (u.tier === 'premium') return res.status(400).json({ error: 'Your account is already premium.' });
 
-  const submitted = req.body.code?.trim().toUpperCase();
-  if (!submitted) return res.status(400).json({ error: 'Code is required.' });
+    const submitted = req.body.code?.trim().toUpperCase();
+    if (!submitted) return res.status(400).json({ error: 'Code is required.' });
 
-  const current = getPromoCode();
-  if (!current) return res.status(400).json({ error: 'No active promo code at this time.' });
-  if (submitted !== current) return res.status(400).json({ error: 'Invalid promo code.' });
+    const current = getPromoCode();
+    if (!current) return res.status(400).json({ error: 'No active promo code at this time.' });
+    if (submitted !== current) return res.status(400).json({ error: 'Invalid promo code.' });
 
-  db.prepare('UPDATE users SET tier = ?, promo_code_redeemed = ? WHERE id = ?').run('premium', submitted, req.user.id);
-  const updated = db.prepare('SELECT id, name, email, role, tier, two_factor_enabled, backup_email, email_verified, promo_code_redeemed FROM users WHERE id = ?').get(req.user.id);
-  const token = require('jsonwebtoken').sign({ id: updated.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-  res.json({ ok: true, token, user: updated });
+    const promoPriceId = process.env.STRIPE_PRICE_PROMO;
+    if (!promoPriceId) return res.status(500).json({ error: 'Promo pricing not configured. Contact support.' });
+
+    // Mark code redeemed so the discount is locked to this user permanently
+    db.prepare('UPDATE users SET promo_code_redeemed = ? WHERE id = ?').run(submitted, u.id);
+
+    // Create or retrieve Stripe customer
+    const Stripe = require('stripe');
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+    const BASE_URL = process.env.FRONTEND_URL || 'https://peakledger.app';
+
+    let customerId = u.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: u.email, name: u.name,
+        metadata: { user_id: String(u.id), role: u.role },
+      });
+      customerId = customer.id;
+      db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').run(customerId, u.id);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: promoPriceId, quantity: 1 }],
+      success_url: `${BASE_URL}/app?upgraded=1`,
+      cancel_url:  `${BASE_URL}/app`,
+      metadata: { user_id: String(u.id) },
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Promo redeem error:', err);
+    res.status(500).json({ error: err.message || 'Failed to start checkout' });
+  }
+});
+
+// ── Token refresh ─────────────────────────────────────────────────────────────
+router.post('/refresh', requireAuth, (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ token: sign(user) });
 });
 
 router.get('/promo/status', requireAuth, (req, res) => {

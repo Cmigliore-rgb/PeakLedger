@@ -11,7 +11,12 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('pl_token');
     if (!token) { setLoading(false); return; }
     api.get('/auth/me')
-      .then(r => setUser(r.data.user))
+      .then(r => {
+        setUser(r.data.user);
+        api.post('/auth/refresh').then(r2 => {
+          if (r2.data?.token) localStorage.setItem('pl_token', r2.data.token);
+        }).catch(() => {});
+      })
       .catch(() => localStorage.removeItem('pl_token'))
       .finally(() => setLoading(false));
   }, []);
@@ -22,6 +27,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    if (navigator.credentials?.preventSilentAccess) navigator.credentials.preventSilentAccess();
     const uid = user?.id;
     // Clear user-scoped data so the next user on this browser gets a clean slate
     const userKeys = uid ? [

@@ -43,6 +43,35 @@ export default function Login() {
   const [tfLoading, setTfLoading] = useState(false);
   const [verified, setVerified] = useState(false);
 
+  const storeCredential = (email, password) => {
+    if (typeof PasswordCredential === 'undefined') return;
+    try { navigator.credentials.store(new PasswordCredential({ id: email, password })).catch(() => {}); } catch {}
+  };
+
+  // Auto sign-in via browser/PWA saved credentials (silent — no UI prompt)
+  useEffect(() => {
+    if (localStorage.getItem('pl_token')) return;
+    if (typeof navigator.credentials?.get !== 'function') return;
+    navigator.credentials.get({ password: true, mediation: 'silent' })
+      .then(cred => {
+        if (!cred || cred.type !== 'password') return;
+        setLoading(true);
+        api.post('/auth/login', { email: cred.id, password: cred.password })
+          .then(({ data }) => {
+            if (data.requiresTwoFactor) {
+              setForm({ email: cred.id, password: cred.password });
+              setTwoFactor({ tempToken: data.tempToken });
+              setLoading(false);
+            } else {
+              login(data.token, data.user);
+              navigate('/app');
+            }
+          })
+          .catch(() => setLoading(false));
+      })
+      .catch(() => {});
+  }, []);
+
   const handleGoogle = () => {
     const redirectUri = `${window.location.origin}/auth/google/callback`;
     const nonce = Math.random().toString(36).slice(2);
@@ -74,6 +103,7 @@ export default function Login() {
       if (data.requiresTwoFactor) {
         setTwoFactor({ tempToken: data.tempToken });
       } else {
+        storeCredential(form.email, form.password);
         login(data.token, data.user);
         navigate('/app');
       }
@@ -87,6 +117,7 @@ export default function Login() {
     setError(''); setTfLoading(true);
     try {
       const { data } = await api.post('/auth/verify-2fa', { tempToken: twoFactor.tempToken, code: tfCode });
+      if (form.password) storeCredential(form.email, form.password);
       login(data.token, data.user);
       navigate('/app');
     } catch (err) {

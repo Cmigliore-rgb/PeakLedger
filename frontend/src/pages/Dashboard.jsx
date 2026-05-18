@@ -3830,6 +3830,12 @@ export default function Dashboard() {
       refreshUser();
       window.history.replaceState({}, '', '/app');
     }
+    if (params.get('edu_verified') === '1') {
+      refreshUser();
+      window.history.replaceState({}, '', '/app');
+      setToast({ message: 'Student email verified. Student pricing is now active on your account.', color: '#34d399', icon: '✓' });
+      setTimeout(() => setToast(null), 5000);
+    }
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
   useEffect(() => { if (!user?.id) return; localStorage.setItem(`pl_calendar_${user.id}`, JSON.stringify(calendarEvents)); }, [calendarEvents]); // eslint-disable-line
@@ -12331,40 +12337,38 @@ export default function Dashboard() {
                   <div style={{ ...CARD, marginBottom: 16 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Promo Code</div>
                     <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Have a promo code? Enter it below for permanent premium access.</div>
-                    {promoRedeemStatus === 'success' ? (
-                      <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 8, fontSize: 13, color: GREEN }}>
-                        Premium unlocked. Welcome to PeakLedger Pro.
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          value={promoRedeemInput}
+                          onChange={e => { setPromoRedeemInput(e.target.value.toUpperCase()); setPromoRedeemStatus(null); }}
+                          placeholder="Enter code..."
+                          style={{ flex: 1, padding: '9px 12px', background: MUTED, border: promoRedeemStatus && promoRedeemStatus !== 'redirecting' ? '1px solid rgba(248,113,113,0.5)' : BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', fontFamily: 'monospace', letterSpacing: '1px', textTransform: 'uppercase' }}
+                        />
+                        <button
+                          disabled={promoRedeemSaving || !promoRedeemInput.trim()}
+                          onClick={async () => {
+                            setPromoRedeemSaving(true); setPromoRedeemStatus(null);
+                            try {
+                              const r = await api.post('/auth/promo/redeem', { code: promoRedeemInput.trim() });
+                              setPromoRedeemStatus('redirecting');
+                              window.location.href = r.data.url;
+                            } catch (err) {
+                              setPromoRedeemStatus(err.response?.data?.error || 'Invalid code. Please try again.');
+                              setPromoRedeemSaving(false);
+                            }
+                          }}
+                          style={{ padding: '9px 18px', background: BLUE_BTN, border: 'none', borderRadius: 7, color: '#fff', fontSize: 13, fontWeight: 600, cursor: (promoRedeemSaving || !promoRedeemInput.trim()) ? 'default' : 'pointer', opacity: (promoRedeemSaving || !promoRedeemInput.trim()) ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                          {promoRedeemSaving ? (promoRedeemStatus === 'redirecting' ? 'Opening...' : 'Checking...') : 'Apply'}
+                        </button>
                       </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <input
-                            value={promoRedeemInput}
-                            onChange={e => { setPromoRedeemInput(e.target.value.toUpperCase()); setPromoRedeemStatus(null); }}
-                            placeholder="Enter code..."
-                            style={{ flex: 1, padding: '9px 12px', background: MUTED, border: promoRedeemStatus === 'error' ? '1px solid rgba(248,113,113,0.5)' : BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', fontFamily: 'monospace', letterSpacing: '1px', textTransform: 'uppercase' }}
-                          />
-                          <button
-                            disabled={promoRedeemSaving || !promoRedeemInput.trim()}
-                            onClick={async () => {
-                              setPromoRedeemSaving(true); setPromoRedeemStatus(null);
-                              try {
-                                const r = await api.post('/auth/promo/redeem', { code: promoRedeemInput.trim() });
-                                if (r.data.token && r.data.user) login(r.data.token, r.data.user);
-                                setPromoRedeemStatus('success');
-                              } catch (err) {
-                                setPromoRedeemStatus(err.response?.data?.error || 'Invalid code. Please try again.');
-                              } finally { setPromoRedeemSaving(false); }
-                            }}
-                            style={{ padding: '9px 18px', background: BLUE_BTN, border: 'none', borderRadius: 7, color: '#fff', fontSize: 13, fontWeight: 600, cursor: (promoRedeemSaving || !promoRedeemInput.trim()) ? 'default' : 'pointer', opacity: (promoRedeemSaving || !promoRedeemInput.trim()) ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-                            {promoRedeemSaving ? 'Checking...' : 'Redeem'}
-                          </button>
-                        </div>
-                        {promoRedeemStatus && promoRedeemStatus !== 'success' && (
-                          <div style={{ fontSize: 12, color: RED }}>{promoRedeemStatus}</div>
-                        )}
-                      </div>
-                    )}
+                      {promoRedeemStatus === 'redirecting' && (
+                        <div style={{ fontSize: 12, color: GREEN }}>Code accepted. Redirecting to checkout...</div>
+                      )}
+                      {promoRedeemStatus && promoRedeemStatus !== 'redirecting' && (
+                        <div style={{ fontSize: 12, color: RED }}>{promoRedeemStatus}</div>
+                      )}
+                    </div>
                   </div>
                 )}
 

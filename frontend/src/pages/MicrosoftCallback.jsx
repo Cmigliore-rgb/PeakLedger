@@ -19,7 +19,7 @@ export default function MicrosoftCallback() {
     api.post('/auth/microsoft', { id_token })
       .then(({ data }) => {
         localStorage.setItem('pl_token', data.token);
-        window.location.href = '/app';
+        window.location.href = data.user?.role === 'student' ? '/app?edu_verified=1' : '/app';
       })
       .catch(err => {
         const msg = err.response?.data?.error || 'Microsoft sign-in failed';

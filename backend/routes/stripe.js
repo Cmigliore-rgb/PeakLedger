@@ -8,6 +8,7 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const PRICES = {
   standard: process.env.STRIPE_PRICE_STANDARD,
   student:  process.env.STRIPE_PRICE_STUDENT,
+  promo:    process.env.STRIPE_PRICE_PROMO,
 };
 
 const BASE_URL = process.env.FRONTEND_URL || 'https://peakledger.app';
@@ -37,7 +38,13 @@ router.post('/checkout', auth, async (req, res) => {
     const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
     const eduAge = user.edu_verified_at ? Date.now() - new Date(user.edu_verified_at).getTime() : Infinity;
     const isEduVerified = user.email_verified && user.email.toLowerCase().endsWith('.edu') && eduAge < ONE_YEAR_MS;
-    const priceId = isEduVerified ? PRICES.student : PRICES.standard;
+
+    let priceId;
+    if (isEduVerified) priceId = PRICES.student;
+    else if (user.promo_code_redeemed) priceId = PRICES.promo;
+    else priceId = PRICES.standard;
+
+    if (!priceId) return res.status(500).json({ error: 'Pricing not configured. Contact support.' });
 
     // Create or retrieve Stripe customer
     let customerId = user.stripe_customer_id;

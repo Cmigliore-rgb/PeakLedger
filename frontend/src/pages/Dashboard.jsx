@@ -6631,7 +6631,7 @@ export default function Dashboard() {
                         <div style={{ fontSize: 12, color: TEXT3 }}>Connect a bank account to see your spending here.</div>
                       </div>
                     ) : (
-                      <div className="card-scroll">
+                      <div className="card-scroll" style={{ maxHeight: 260 }}>
                         {(() => {
                           const todayStr = new Date().toISOString().slice(0, 10);
                           const yestStr  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);

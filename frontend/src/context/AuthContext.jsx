@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
     // Clear user-scoped data so the next user on this browser gets a clean slate
     const userKeys = uid ? [
       `pl_calendar_${uid}`, `pl_cat_overrides_${uid}`, `pl_cat_emojis_${uid}`,
-      `pl_tickers_${uid}`, `pl_notif_sent_${uid}`, `pl_prof_tabs_${uid}`,
+      `pl_tickers_${uid}`, `pl_prof_tabs_${uid}`,
       `pl_prof_content_${uid}`, `pl_learn_videos_${uid}`, `pl_layout_order_${uid}`,
       `pl_hidden_subtabs_${uid}`,
     ] : [];

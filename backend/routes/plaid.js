@@ -321,6 +321,41 @@ router.delete('/manual-accounts/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Manual Holdings (investment positions without Plaid) ──────────────────
+router.get('/manual-holdings', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM manual_holdings WHERE user_id = ? ORDER BY created_at ASC').all(req.user.id);
+  res.json(rows);
+});
+
+router.post('/manual-holdings', requireAuth, (req, res) => {
+  const { ticker, name, asset_type = 'stock', shares = 0, cost_per_share = 0, manual_value, purchase_date } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const r = db.prepare(
+    'INSERT INTO manual_holdings (user_id, ticker, name, asset_type, shares, cost_per_share, manual_value, purchase_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(req.user.id, ticker || null, name, asset_type, shares, cost_per_share, manual_value ?? null, purchase_date || null);
+  res.json(db.prepare('SELECT * FROM manual_holdings WHERE id = ?').get(r.lastInsertRowid));
+});
+
+router.patch('/manual-holdings/:id', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT * FROM manual_holdings WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  const { ticker, name, asset_type, shares, cost_per_share, manual_value, purchase_date } = req.body;
+  db.prepare(
+    `UPDATE manual_holdings SET ticker=?, name=?, asset_type=?, shares=?, cost_per_share=?, manual_value=?, purchase_date=?, updated_at=datetime('now') WHERE id=? AND user_id=?`
+  ).run(
+    ticker ?? row.ticker, name ?? row.name, asset_type ?? row.asset_type,
+    shares ?? row.shares, cost_per_share ?? row.cost_per_share,
+    manual_value ?? row.manual_value, purchase_date ?? row.purchase_date,
+    req.params.id, req.user.id
+  );
+  res.json(db.prepare('SELECT * FROM manual_holdings WHERE id = ?').get(req.params.id));
+});
+
+router.delete('/manual-holdings/:id', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM manual_holdings WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
 // ── Manual sync: force-refresh cache for all connected accounts ───────────
 router.post('/sync', requireAuth, async (req, res) => {
   try {

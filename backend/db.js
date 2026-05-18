@@ -267,6 +267,24 @@ try {
   `);
 } catch {}
 
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_holdings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ticker TEXT,
+      name TEXT NOT NULL,
+      asset_type TEXT NOT NULL DEFAULT 'stock',
+      shares REAL NOT NULL DEFAULT 0,
+      cost_per_share REAL NOT NULL DEFAULT 0,
+      manual_value REAL,
+      purchase_date TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+} catch {}
+
 // Auto-verify admin and professor accounts
 db.prepare("UPDATE users SET email_verified = 1 WHERE role IN ('admin', 'professor') AND email_verified = 0").run();
 

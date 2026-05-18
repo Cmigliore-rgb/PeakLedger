@@ -3280,6 +3280,10 @@ export default function Dashboard() {
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [holdingsExpanded, setHoldingsExpanded] = useState(false);
+  const [showManualHoldingForm, setShowManualHoldingForm] = useState(false);
+  const [manualHoldingEdit, setManualHoldingEdit] = useState(null); // raw manual holding being edited
+  const [manualHoldingForm, setManualHoldingForm] = useState({ ticker: '', name: '', asset_type: 'stock', shares: '', cost_per_share: '', manual_value: '', purchase_date: '' });
+  const [manualHoldingSaving, setManualHoldingSaving] = useState(false);
   const [invTab, setInvTab] = useState('stocks');
   const [selectedSector, setSelectedSector] = useState(null);
   const [holdingPeriod, setHoldingPeriod] = useState('1D');
@@ -3891,7 +3895,7 @@ export default function Dashboard() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [acc, tellerAcc, txns, tellerTxns, hold, liabRes, news, snaps, limits, goalsRes, marketRes, tickersRes, sp500Res, yieldRes, connRes] = await Promise.allSettled([
+      const [acc, tellerAcc, txns, tellerTxns, hold, liabRes, news, snaps, limits, goalsRes, marketRes, tickersRes, sp500Res, yieldRes, connRes, manualHoldRes] = await Promise.allSettled([
         api.get('/plaid/accounts'),
         api.get('/teller/accounts'),
         api.get('/transactions'),
@@ -3907,6 +3911,7 @@ export default function Dashboard() {
         api.get('/market/sp500', { params: { period: '1y' } }),
         api.get('/market/yield-curve'),
         api.get('/plaid/connections'),
+        api.get('/plaid/manual-holdings'),
       ]);
 
       const plaidAccounts = acc.status       === 'fulfilled' ? acc.value.data.accounts            || [] : [];
@@ -3946,9 +3951,35 @@ export default function Dashboard() {
       setBudget(budgetData);
 
       const holdData    = hold.status === 'fulfilled' ? hold.value.data : {};
-      const allHoldings = holdData.holdings || [];
-      setHoldings(allHoldings);
-      setNoBrokerage(!!holdData.noBrokerage);
+      const plaidHoldings = holdData.holdings || [];
+
+      // Merge manual holdings: fetch live prices for ticker-based ones
+      const rawManual = manualHoldRes.status === 'fulfilled' ? manualHoldRes.value.data : [];
+      let manualPriceMap = {};
+      const manualTickers = rawManual.filter(m => m.ticker).map(m => m.ticker);
+      if (manualTickers.length > 0) {
+        try {
+          const pr = await api.get('/market/tickers', { params: { tickers: manualTickers.join(',') } });
+          (pr.data.quotes || []).forEach(q => { manualPriceMap[q.symbol] = q.regularMarketPrice; });
+        } catch {}
+      }
+      const manualHoldingsFormatted = rawManual.map(m => {
+        const livePrice = m.ticker ? (manualPriceMap[m.ticker] || 0) : null;
+        const qty = m.ticker ? (m.shares || 0) : 1;
+        const price = m.ticker ? livePrice : (m.manual_value || 0);
+        return {
+          quantity: qty,
+          institution_price: price,
+          cost_basis: m.ticker ? (m.shares || 0) * (m.cost_per_share || 0) : (m.manual_value || 0),
+          security: { ticker_symbol: m.ticker || null, name: m.name, type: m.asset_type },
+          _manual: true,
+          _manual_id: m.id,
+          _manual_raw: m,
+        };
+      });
+
+      setHoldings([...plaidHoldings, ...manualHoldingsFormatted]);
+      setNoBrokerage(!!holdData.noBrokerage && rawManual.length === 0);
 
       if (liabRes.status === 'fulfilled') {
         const ld = liabRes.value.data;
@@ -6399,20 +6430,6 @@ export default function Dashboard() {
                         <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{card.label}</div>
                         <div style={{ fontSize: isMobile ? 20 : 30, fontWeight: 700, margin: isMobile ? 0 : '8px 0 4px', letterSpacing: '-1px' }}>{card.value}</div>
                         {!isMobile && <div style={{ fontSize: 12, color: TEXT2 }}>{card.sub}</div>}
-                        {!isMobile && card.key === 'nw' && (() => {
-                          const snaps = (isDemoData ? DEMO_SNAPSHOTS : snapshots).slice(-12);
-                          if (snaps.length < 2) return null;
-                          const vals = snaps.map(s => s.value ?? s.net_worth ?? 0);
-                          const minV = Math.min(...vals), maxV = Math.max(...vals), rng = maxV - minV || 1;
-                          const SW = 84, SH = 28;
-                          const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * SW).toFixed(1)},${(SH - ((v - minV) / rng) * SH).toFixed(1)}`).join(' ');
-                          const isUp = vals[vals.length - 1] >= vals[0];
-                          return (
-                            <svg width={SW} height={SH} viewBox={`0 0 ${SW} ${SH}`} style={{ display: 'block', marginTop: 10, opacity: 0.85 }}>
-                              <polyline points={pts} fill="none" stroke={isUp ? GREEN : RED} strokeWidth={1.5} strokeLinejoin="round" />
-                            </svg>
-                          );
-                        })()}
                       </div>
                     ));
                   })()}
@@ -7026,6 +7043,16 @@ export default function Dashboard() {
                             </div>
                           );
                         })}
+                      </div>
+
+                      {/* Legend */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 12 }}>
+                        {Object.entries(EVENT_TYPES).map(([k, v]) => (
+                          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: v.color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, color: TEXT2, fontWeight: 600 }}>{v.label}</span>
+                          </div>
+                        ))}
                       </div>
 
                       {/* Upcoming events */}
@@ -9942,7 +9969,7 @@ export default function Dashboard() {
                               const costBasis=h.cost_basis||0;
                               const totalReturn=costBasis>0 ? value-costBasis : null;
                               const totalReturnPct=costBasis>0 ? ((value-costBasis)/costBasis)*100 : null;
-                              const clickable=ticker!=='—';
+                              const clickable=ticker!=='—' && !h._manual;
                               return (
                                 <tr key={i} className="lr" style={{ borderBottom:`1px solid ${BORDER_C}`, cursor:clickable?'pointer':'default' }}
                                   onClick={()=>{ if(!clickable) return; setSelectedTicker({symbol:ticker,name,price}); setTickerChartPeriod('3mo'); fetchTickerChart(ticker,'3mo'); }}>
@@ -9950,11 +9977,12 @@ export default function Dashboard() {
                                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                                       <CompanyLogo name={name} ticker={ticker!=='—'?ticker:undefined} size={26} radius={6}/>
                                       <span style={{ fontWeight:700, color:BLUE, fontSize:13 }}>{ticker}</span>
+                                      {h._manual && <span style={{ fontSize:9, fontWeight:700, color:BLUE, background:`${BLUE}18`, padding:'1px 5px', borderRadius:3 }}>Manual</span>}
                                     </div>
                                   </td>
                                   <td style={{ padding:'10px 12px', fontSize:13, color:TEXT2, maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</td>
-                                  <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{qty.toFixed(3)}</td>
-                                  <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{fmt(price)}</td>
+                                  <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{h._manual && !h._manual_raw?.ticker ? '—' : qty.toFixed(3)}</td>
+                                  <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{h._manual && !h._manual_raw?.ticker ? '—' : fmt(price)}</td>
                                   <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontFamily:'monospace' }}>{fmt(value)}</td>
                                   <td style={{ padding:'10px 12px', textAlign:'right' }}>
                                     {totalReturnPct==null ? <span style={{ color:TEXT3 }}>—</span> : (
@@ -9969,7 +9997,14 @@ export default function Dashboard() {
                                     )}
                                   </td>
                                   <td style={{ padding:'10px 12px', textAlign:'right' }}>
-                                    {periodPct==null ? <span style={{ color:TEXT3 }}>—</span> : (
+                                    {h._manual ? (
+                                      <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }} onClick={e => e.stopPropagation()}>
+                                        <button onClick={() => { const m=h._manual_raw; setManualHoldingEdit(m); setManualHoldingForm({ ticker:m.ticker||'', name:m.name, asset_type:m.asset_type, shares:String(m.shares||''), cost_per_share:String(m.cost_per_share||''), manual_value:String(m.manual_value||''), purchase_date:m.purchase_date||'' }); setShowManualHoldingForm(true); }}
+                                          style={{ padding:'3px 8px', background:'transparent', border:BORDER, borderRadius:5, color:TEXT2, fontSize:11, fontWeight:600, cursor:'pointer' }}>Edit</button>
+                                        <button onClick={async () => { if(!window.confirm(`Delete "${h.security?.name}"?`)) return; await api.delete(`/plaid/manual-holdings/${h._manual_id}`); fetchAll(); }}
+                                          style={{ padding:'3px 8px', background:'transparent', border:'1px solid rgba(248,113,113,0.3)', borderRadius:5, color:RED, fontSize:11, fontWeight:600, cursor:'pointer' }}>Del</button>
+                                      </div>
+                                    ) : periodPct==null ? <span style={{ color:TEXT3 }}>—</span> : (
                                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
                                         <span style={{ fontWeight:700, fontSize:12, color:periodPct>=0?GREEN:RED }}>
                                           {periodPct>=0?'▲':'▼'} {Math.abs(periodPct).toFixed(2)}%
@@ -10076,7 +10111,7 @@ export default function Dashboard() {
                         );
                       })()}
 
-                      <div data-tour="investments-holdings" style={{ display:'flex', gap:6, marginBottom:16, flexWrap:'wrap' }}>
+                      <div data-tour="investments-holdings" style={{ display:'flex', gap:6, marginBottom: showManualHoldingForm ? 12 : 16, flexWrap:'wrap', alignItems:'center' }}>
                         {INV_TABS.map(t=>{
                           const count=classified.filter(h=>h._type===t.key).length;
                           const active=invTab===t.key;
@@ -10088,7 +10123,104 @@ export default function Dashboard() {
                             </button>
                           );
                         })}
+                        <button onClick={() => { setManualHoldingEdit(null); setManualHoldingForm({ ticker:'', name:'', asset_type:'stock', shares:'', cost_per_share:'', manual_value:'', purchase_date:'' }); setShowManualHoldingForm(v => !v); }}
+                          style={{ marginLeft:'auto', padding:'6px 14px', background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.3)', borderRadius:7, color:GREEN, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                          + Add Holding
+                        </button>
                       </div>
+
+                      {/* Manual holding form */}
+                      {showManualHoldingForm && (
+                        <div style={{ background:DARK, border:BORDER, borderRadius:10, padding:'14px 16px', marginBottom:16 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:TEXT, marginBottom:12 }}>{manualHoldingEdit ? 'Edit Holding' : 'Add Manual Holding'}</div>
+                          <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
+                            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Ticker <span style={{ color:TEXT3, fontWeight:400 }}>(optional)</span></label>
+                              <input value={manualHoldingForm.ticker} onChange={e => setManualHoldingForm(f => ({ ...f, ticker: e.target.value.toUpperCase() }))}
+                                placeholder="e.g. AAPL"
+                                style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
+                            </div>
+                            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Name</label>
+                              <input value={manualHoldingForm.name} onChange={e => setManualHoldingForm(f => ({ ...f, name: e.target.value }))}
+                                placeholder="e.g. Apple Inc."
+                                style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none' }} />
+                            </div>
+                            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Type</label>
+                              <select value={manualHoldingForm.asset_type} onChange={e => setManualHoldingForm(f => ({ ...f, asset_type: e.target.value }))}
+                                style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', cursor:'pointer' }}>
+                                {[['stock','Stock'],['etf','ETF'],['bonds','Bond'],['crypto','Crypto'],['cash','Cash'],['other','Other']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          {manualHoldingForm.ticker ? (
+                            <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Shares</label>
+                                <input type="number" value={manualHoldingForm.shares} onChange={e => setManualHoldingForm(f => ({ ...f, shares: e.target.value }))}
+                                  placeholder="0"
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
+                              </div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Cost per Share ($)</label>
+                                <input type="number" value={manualHoldingForm.cost_per_share} onChange={e => setManualHoldingForm(f => ({ ...f, cost_per_share: e.target.value }))}
+                                  placeholder="0.00"
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
+                              </div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Purchase Date</label>
+                                <input type="date" value={manualHoldingForm.purchase_date} onChange={e => setManualHoldingForm(f => ({ ...f, purchase_date: e.target.value }))}
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', colorScheme:'dark' }} />
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr', gap:10, marginBottom:10 }}>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Current Value ($)</label>
+                                <input type="number" value={manualHoldingForm.manual_value} onChange={e => setManualHoldingForm(f => ({ ...f, manual_value: e.target.value }))}
+                                  placeholder="0.00"
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
+                              </div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Purchase Date</label>
+                                <input type="date" value={manualHoldingForm.purchase_date} onChange={e => setManualHoldingForm(f => ({ ...f, purchase_date: e.target.value }))}
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', colorScheme:'dark' }} />
+                              </div>
+                            </div>
+                          )}
+                          {manualHoldingForm.ticker && (
+                            <div style={{ fontSize:11, color:TEXT3, marginBottom:10 }}>Live price will be fetched from Yahoo Finance on save.</div>
+                          )}
+                          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                            <button onClick={() => { setShowManualHoldingForm(false); setManualHoldingEdit(null); }}
+                              style={{ padding:'7px 16px', background:'transparent', border:BORDER, borderRadius:7, color:TEXT2, fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
+                            <button disabled={manualHoldingSaving || !manualHoldingForm.name.trim()}
+                              onClick={async () => {
+                                setManualHoldingSaving(true);
+                                const body = {
+                                  ticker: manualHoldingForm.ticker || null,
+                                  name: manualHoldingForm.name,
+                                  asset_type: manualHoldingForm.asset_type,
+                                  shares: parseFloat(manualHoldingForm.shares) || 0,
+                                  cost_per_share: parseFloat(manualHoldingForm.cost_per_share) || 0,
+                                  manual_value: manualHoldingForm.ticker ? null : (parseFloat(manualHoldingForm.manual_value) || 0),
+                                  purchase_date: manualHoldingForm.purchase_date || null,
+                                };
+                                try {
+                                  if (manualHoldingEdit) await api.patch(`/plaid/manual-holdings/${manualHoldingEdit.id}`, body);
+                                  else await api.post('/plaid/manual-holdings', body);
+                                  setShowManualHoldingForm(false);
+                                  setManualHoldingEdit(null);
+                                  fetchAll();
+                                } catch { /* silent */ } finally { setManualHoldingSaving(false); }
+                              }}
+                              style={{ padding:'7px 16px', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.35)', borderRadius:7, color:GREEN, fontSize:13, fontWeight:600, cursor:'pointer', opacity:manualHoldingSaving?0.6:1 }}>
+                              {manualHoldingSaving ? 'Saving…' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Pie + holdings grid */}
                       {activeHoldings.length>0 ? (

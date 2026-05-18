@@ -40,8 +40,8 @@ router.post('/checkout', auth, async (req, res) => {
     const isEduVerified = user.email_verified && user.email.toLowerCase().endsWith('.edu') && eduAge < ONE_YEAR_MS;
 
     let priceId;
-    if (isEduVerified) priceId = PRICES.student;
-    else if (user.promo_code_redeemed) priceId = PRICES.promo;
+    if (user.promo_code_redeemed) priceId = PRICES.promo;
+    else if (isEduVerified) priceId = PRICES.student;
     else priceId = PRICES.standard;
 
     if (!priceId) return res.status(500).json({ error: 'Pricing not configured. Contact support.' });

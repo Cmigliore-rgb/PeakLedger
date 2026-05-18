@@ -1394,6 +1394,16 @@ function _resolveCategory(txn) {
   return base;
 }
 
+// Returns true for internal account transfers (Plaid TRANSFER_IN / TRANSFER_OUT).
+// These should be excluded from income and expense totals to avoid double-counting.
+function isTransfer(txn) {
+  const primary = (txn.personal_finance_category?.primary || txn.category?.[0] || '').toUpperCase();
+  if (primary === 'TRANSFER_IN' || primary === 'TRANSFER_OUT') return true;
+  // Fallback: name-based heuristic for banks that don't use the personal_finance_category field
+  const name = (txn.merchant_name || txn.name || '').toLowerCase();
+  return /^(transfer (from|to|between)|online transfer|account transfer|zelle transfer)/i.test(name);
+}
+
 const ACCOUNT_TYPE_LABEL = {
   depository: 'Bank Account',
   credit:     'Credit Card',
@@ -4115,8 +4125,12 @@ export default function Dashboard() {
 
       if (liabRes.status === 'fulfilled') {
         const ld = liabRes.value.data;
+        const plaidCreditIds = new Set((ld.credit || []).map(c => c.account_id));
+        const creditFallback = allAccounts
+          .filter(a => a.type === 'credit' && !plaidCreditIds.has(a.account_id))
+          .map(a => ({ account_id: a.account_id, balances: a.balances, _fromAccount: true }));
         setLiabilities({
-          credit:   ld.credit   || [],
+          credit:   [...(ld.credit || []), ...creditFallback],
           student:  ld.student  || [],
           mortgage: ld.mortgage || [],
         });
@@ -4160,11 +4174,14 @@ export default function Dashboard() {
       const cash      = allAccounts.filter(a => a.type !== 'investment' && a.type !== 'credit').reduce((s, a) => s + (a.balances?.current || 0), 0);
       const portfolio = [...plaidHoldings, ...manualHoldingsFormatted].reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
       const liabData  = liabRes.status === 'fulfilled' ? liabRes.value.data : {};
+      const snapCreditIds = new Set((liabData.credit || []).map(c => c.account_id));
+      const snapCreditFallback = allAccounts.filter(a => a.type === 'credit' && !snapCreditIds.has(a.account_id));
       const totalLiab = [
         ...(liabData.credit   || []),
         ...(liabData.student  || []),
         ...(liabData.mortgage || []),
         ...(liabData.car      || []),
+        ...snapCreditFallback,
       ].reduce((s, l) => s + (l.balances?.current || 0), 0);
       const nw = cash + portfolio - totalLiab;
       if (allAccounts.length > 0) {
@@ -5936,16 +5953,16 @@ export default function Dashboard() {
         const lmEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
         const mTxns  = transactions.filter(t => { const d = new Date(t.date); return d >= mStart && d <= now; });
         const lmTxns = transactions.filter(t => { const d = new Date(t.date); return d >= lmStart && d <= lmEnd; });
-        const mInc  = mTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-        const mExp  = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+        const mInc  = mTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const mExp  = mTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
         const mSave = mInc - mExp;
         const mRate = mInc > 0 ? Math.round((mSave / mInc) * 100) : null;
-        const lmInc = lmTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-        const lmExp = lmTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+        const lmInc = lmTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const lmExp = lmTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
         const incChg = lmInc > 0 ? Math.round(((mInc - lmInc) / lmInc) * 100) : null;
         const expChg = lmExp > 0 ? Math.round(((mExp - lmExp) / lmExp) * 100) : null;
         const catMap = {};
-        mTxns.filter(t => t.amount > 0).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
+        mTxns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
         const topCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
         const rateColor = mRate === null ? TEXT2 : mRate >= 20 ? GREEN : mRate >= 0 ? YELLOW : RED;
         const completedGoals = (goals || []).filter(g => { const a = accounts.find(ac => ac.account_id === g.accountId); return a && a.balances?.current >= g.target; });
@@ -6713,7 +6730,7 @@ export default function Dashboard() {
                     } else {
                       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
-                      const mIncome = monthTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+                      const mIncome = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
                       freeToSpend = mIncome - activeMonthlySpend;
                       subtitle = mIncome > 0 ? `${fmt(activeMonthlySpend)} spent of ${fmt(mIncome)} income` : 'Set budget limits in Expenses for a precise view';
                     }
@@ -6751,8 +6768,8 @@ export default function Dashboard() {
                   } else {
                     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                     const monthTxns = transactions.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
-                    monthIncome   = monthTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-                    monthSpending = monthTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+                    monthIncome   = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+                    monthSpending = monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
                     saved = monthIncome - monthSpending;
                     rate  = monthIncome > 0 ? Math.round((saved / monthIncome) * 100) : null;
                   }
@@ -8155,8 +8172,8 @@ export default function Dashboard() {
                           const start = new Date(d.getFullYear(), d.getMonth(), 1);
                           const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
                           const allTxns = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end; });
-                          expByMonth.push(allTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
-                          incByMonth.push(allTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0));
+                          expByMonth.push(allTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0));
+                          incByMonth.push(allTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0));
                         }
                         const MOCK_EXP = [1180, 1540, 980, 1320, 1110, 1500];
                         const MOCK_INC = [1420, 1850, 1200, 1550, 1350, 1800];
@@ -8288,7 +8305,7 @@ export default function Dashboard() {
                     const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
                     const label     = d.toLocaleDateString('en-US', { month: 'short' });
                     const fullLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    const txns  = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0; });
+                    const txns  = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0 && !isTransfer(t); });
                     const total = txns.reduce((s, t) => s + t.amount, 0);
                     const catMap = {};
                     txns.forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
@@ -8342,7 +8359,7 @@ export default function Dashboard() {
                     if (Object.keys(txnCategoryOverrides).length > 0) {
                       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       const ct = {};
-                      activeTxns.filter(t => t.amount > 0 && new Date(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
+                      activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
                       displayBudget = Object.entries(ct).map(([category, total]) => ({ category, total: Math.round(total * 100) / 100 })).sort((a, b) => b.total - a.total);
                     } else {
                       displayBudget = activeBudget;
@@ -8417,7 +8434,7 @@ export default function Dashboard() {
                       catTxns = activeTxns.filter(t => {
                         const cat = resolveCategory(t);
                         const td  = new Date(t.date);
-                        return cat === selectedCategory && t.amount > 0 && td >= selStart && td <= selEnd;
+                        return cat === selectedCategory && t.amount > 0 && !isTransfer(t) && td >= selStart && td <= selEnd;
                       });
                       total = catTxns.reduce((s, t) => s + t.amount, 0);
                     }
@@ -8894,13 +8911,13 @@ export default function Dashboard() {
                   const inRange = (t, from, to) => { const d = new Date(t.date); return d >= from && d <= to; };
                   const thisTxns = activeTxns.filter(t => inRange(t, thisMonthStart, now));
                   const lastTxns = activeTxns.filter(t => inRange(t, lastMonthStart, lastMonthEnd));
-                  const income   = txns => txns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-                  const expenses = txns => txns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+                  const income   = txns => txns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+                  const expenses = txns => txns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
                   const thisIncome = income(thisTxns), thisExpenses = expenses(thisTxns);
                   const lastIncome = income(lastTxns),  lastExpenses = expenses(lastTxns);
                   const thisNet = thisIncome - thisExpenses, lastNet = lastIncome - lastExpenses;
                   const cashFlowMax = Math.max(thisIncome, thisExpenses, lastIncome, lastExpenses, 1);
-                  const catSpend = txns => { const m = {}; txns.filter(t => t.amount > 0).forEach(t => { const c = resolveCategory(t); m[c] = (m[c] || 0) + t.amount; }); return m; };
+                  const catSpend = txns => { const m = {}; txns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => { const c = resolveCategory(t); m[c] = (m[c] || 0) + t.amount; }); return m; };
                   const thisSpend = catSpend(thisTxns), lastSpend = catSpend(lastTxns);
                   const allCats = [...new Set([...Object.keys(thisSpend), ...Object.keys(lastSpend)])].sort((a, b) => (thisSpend[b] || 0) - (thisSpend[a] || 0));
                   const thisMonthLabel = now.toLocaleDateString('en-US', { month: 'long' });
@@ -8990,7 +9007,7 @@ export default function Dashboard() {
                     { name: 'Hulu',            avgAmt: 7.99,  avgGap: 30, frequency: 'Monthly', monthlyCost: 7.99,  lastDate: '2026-04-20' },
                   ];
                   const groups = {};
-                  activeTxns.filter(t => t.amount > 0).forEach(t => {
+                  activeTxns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => {
                     const key = (t.merchant_name || t.name || '').toLowerCase().trim();
                     if (!key) return;
                     if (!groups[key]) groups[key] = { name: t.merchant_name || t.name, txns: [] };
@@ -9216,7 +9233,7 @@ export default function Dashboard() {
                           pv = Math.max(netWorth, 0);
                           const monthStart = new Date(_now.getFullYear(), _now.getMonth(), 1);
                           const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= _now; });
-                          const mInc = monthTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+                          const mInc = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
                           monthlySavings = Math.max(mInc - activeMonthlySpend, 0);
                         }
                         const adjSavings = Math.max(monthlySavings + projSavingsAdj, 0);
@@ -13254,10 +13271,10 @@ export default function Dashboard() {
                           const now = new Date();
                           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                           const monthTxns = transactions.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
-                          const income = monthTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-                          const spending = monthTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+                          const income = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+                          const spending = monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
                           const catMap = {};
-                          monthTxns.filter(t => t.amount > 0).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
+                          monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
                           const topCategories = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, amount]) => ({ name, amount }));
                           const nw = accounts.reduce((s, a) => s + (a.balance ?? a.balances?.current ?? 0), 0);
                           await api.post('/notifications/digest', { income, spending, saved: income - spending, topCategories, netWorth: nw });

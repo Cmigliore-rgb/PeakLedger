@@ -178,7 +178,7 @@ function ManualAccountsCard({ onAccountsChanged }) {
   const load = () => {
     setLoading(true);
     api.get('/plaid/manual-accounts')
-      .then(r => setAccounts(r.data))
+      .then(r => setAccounts(Array.isArray(r.data) ? r.data : []))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
   };

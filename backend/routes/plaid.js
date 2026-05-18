@@ -285,7 +285,7 @@ const VALID_MANUAL_TYPES = ['depository','credit','investment','loan','other'];
 
 router.get('/manual-accounts', requireAuth, (req, res) => {
   const rows = db.prepare('SELECT * FROM manual_accounts WHERE user_id = ? ORDER BY created_at ASC').all(req.user.id);
-  res.json({ rows });
+  res.json(rows);
 });
 
 router.post('/manual-accounts', requireAuth, (req, res) => {

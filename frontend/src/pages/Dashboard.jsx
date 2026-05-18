@@ -7339,7 +7339,7 @@ export default function Dashboard() {
                   );
                 })()}
                 </DragSection>
-                </div>{/* end flex layout */}
+                </div>
                 )}
               </div>
               );

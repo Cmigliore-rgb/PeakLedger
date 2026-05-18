@@ -418,7 +418,11 @@ router.patch('/users/:id', requireAuth, (req, res) => {
 
   const updates = [];
   const params = [];
-  if (role) { updates.push('role = ?'); params.push(role); }
+  if (role) {
+    updates.push('role = ?'); params.push(role);
+    // Stamp edu_verified_at so student discount triggers at checkout
+    if (role === 'student') { updates.push("edu_verified_at = datetime('now')"); }
+  }
   if (tier) { updates.push('tier = ?'); params.push(tier); }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
 

@@ -3,6 +3,24 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ConnectAccountModal from '../features/plaid/ConnectAccountModal';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  componentDidCatch(e) { console.error('Panel render error:', e); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, color: '#ef4444', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Something went wrong rendering this section.</div>
+          <div style={{ color: '#f87171' }}>{this.state.error.message}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 14, padding: '7px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 7, color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const BG       = 'var(--bg,       #0f0f0f)';
 const SIDE_BG  = 'var(--side-bg,  #141414)';
 const CARD_BG  = 'var(--card-bg,  #1c1c1e)';
@@ -12066,6 +12084,7 @@ export default function Dashboard() {
 
             {/* ── SETTINGS ─────────────────────────────── */}
             {panel === 'settings' && (
+              <ErrorBoundary>
               <div>
                 <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700 }}>Settings</h1>
                 <p style={{ margin: '0 0 28px', color: TEXT2, fontSize: 14 }}>Customize PeakLedger to keep the sidebar focused on what you use.</p>
@@ -12756,6 +12775,7 @@ export default function Dashboard() {
                   )}
                 </div>}
               </div>
+              </ErrorBoundary>
             )}
 
             {/* ── EDU: COURSES (eLC-style) ──────────────── */}

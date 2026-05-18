@@ -4923,7 +4923,7 @@ export default function Dashboard() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   }}
                 >
-                  {sidebarCollapsed ? (isPremium ? '+' : '★') : (isPremium ? '+ Connect Account' : 'Get Premium')}
+                  {sidebarCollapsed ? (isPremium ? '+' : '★') : (isPremium ? '+ Connect Account' : user?.promo_redeemed ? 'Get Premium — $2.99/mo' : 'Get Premium')}
                 </button>
               </div>
             )}
@@ -5490,15 +5490,18 @@ export default function Dashboard() {
             {(() => {
               const isEduVerified = user?.email_verified && user?.email?.toLowerCase().endsWith('.edu');
               const isEduUnverified = !user?.email_verified && user?.email?.toLowerCase().endsWith('.edu');
+              const isPromo = !!user?.promo_redeemed;
+              const price = isPromo ? '$2.99' : isEduVerified ? '$5.99' : '$9.99';
               return (
                 <div style={{ textAlign: 'center', marginBottom: 24 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: BLUE, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Premium</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 2 }}>
-                    <span style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-1px', color: TEXT, lineHeight: 1 }}>{isEduVerified ? '$5.99' : '$9.99'}</span>
+                    <span style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-1px', color: TEXT, lineHeight: 1 }}>{price}</span>
                     <span style={{ fontSize: 15, color: TEXT2, marginLeft: 4 }}>/month</span>
                   </div>
-                  {isEduVerified && <div style={{ fontSize: 12, color: '#4ade80', marginTop: 6 }}>Student discount applied</div>}
-                  {isEduUnverified && <div style={{ fontSize: 12, color: YELLOW, marginTop: 6 }}>Verify your .edu email to unlock $5.99/mo student pricing</div>}
+                  {isPromo && <div style={{ fontSize: 12, color: '#f472b6', marginTop: 6, fontWeight: 600 }}>You know people. Insider pricing locked in.</div>}
+                  {!isPromo && isEduVerified && <div style={{ fontSize: 12, color: '#4ade80', marginTop: 6 }}>Student discount applied</div>}
+                  {!isPromo && isEduUnverified && <div style={{ fontSize: 12, color: YELLOW, marginTop: 6 }}>Verify your .edu email to unlock $5.99/mo student pricing</div>}
                 </div>
               );
             })()}

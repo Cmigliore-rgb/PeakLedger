@@ -23,7 +23,7 @@ const quotesCache   = {};
 const YIELD_SYMBOLS = ['^IRX', '^FVX', '^TNX', '^TYX'];
 const YIELD_META    = { '^IRX': { label: '3M', years: 0.25 }, '^FVX': { label: '5Y', years: 5 }, '^TNX': { label: '10Y', years: 10 }, '^TYX': { label: '30Y', years: 30 } };
 
-const INDEX_NAMES = { '^GSPC': 'S&P 500', '^DJI': 'Dow 30', '^IXIC': 'Nasdaq', '^RUT': 'Russell 2K' };
+const INDEX_NAMES = { '^GSPC': 'S&P 500', '^DJI': 'Dow 30', '^IXIC': 'Nasdaq', '^RUT': 'Russell 2K', 'QQQ': 'Nasdaq 100' };
 
 // ── Fear & Greed ──────────────────────────────────────────────────────────────
 router.get('/fear-greed', async (req, res) => {
@@ -49,7 +49,7 @@ router.get('/tickers', async (req, res) => {
   if (tickersCache.data && Date.now() - tickersCache.ts < CACHE.TICKERS) return res.json(tickersCache.data);
   if (!yahooFinance) return res.json({ indices: [], active: [] });
   try {
-    const INDICES = ['^GSPC', '^DJI', '^IXIC', '^RUT'];
+    const INDICES = ['^GSPC', '^DJI', '^IXIC', '^RUT', 'QQQ'];
     const trending = await getTrendingTickers();
     const [indexRes, activeRes] = await Promise.allSettled([
       Promise.allSettled(INDICES.map(s => yahooFinance.quote(s))),
@@ -238,11 +238,13 @@ router.get('/chart/:symbol', async (req, res) => {
   }
 });
 
-// ── S&P 500 historical chart ───────────────────────────────────────────────────
+// ── S&P 500 / index historical chart ─────────────────────────────────────────
+const VALID_INDEX_SYMBOLS = new Set(['^GSPC', '^DJI', '^IXIC', '^RUT', 'QQQ', 'SPY', 'DIA', 'IWM', 'VTI', 'VOO']);
 router.get('/sp500', async (req, res) => {
   const VALID = ['1d','5d','1mo','3mo','6mo','ytd','1y','5y','max'];
   const period = VALID.includes(req.query.period) ? req.query.period : '1y';
-  const cacheKey = `sp500-${period}`;
+  const symbol = VALID_INDEX_SYMBOLS.has(req.query.symbol) ? req.query.symbol : '^GSPC';
+  const cacheKey = `sp500-${symbol}-${period}`;
   if (chartCache[cacheKey] && Date.now() - chartCache[cacheKey].ts < CACHE.CHART) {
     return res.json(chartCache[cacheKey].data);
   }
@@ -257,7 +259,7 @@ router.get('/sp500', async (req, res) => {
       period1 = new Date(Date.now() - (daysMap[period] || 370) * 24 * 60 * 60 * 1000);
     }
     const period2 = new Date();
-    const result = await yahooFinance.chart('^GSPC', { period1, period2, interval });
+    const result = await yahooFinance.chart(symbol, { period1, period2, interval });
     const toDate = c => (c.date instanceof Date ? c.date : new Date(c.date)).toISOString().slice(0, interval === '1h' ? 16 : 10);
     let candles = (result.quotes || [])
       .filter(c => c.close != null)

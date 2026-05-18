@@ -2,6 +2,7 @@
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ConnectAccountModal from '../features/plaid/ConnectAccountModal';
+import Onboarding from './Onboarding';
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -873,10 +874,11 @@ const SNAPSHOT_SP500 = [
 ];
 const SNAPSHOT_FEAR_GREED = { score: 53, rating: 'Neutral' };
 const SNAPSHOT_INDICES = [
-  { name: 'S&P 500',      price: 5659.91,  changePct:  0.58 },
-  { name: 'Dow Jones',    price: 42410.10, changePct:  0.62 },
-  { name: 'NASDAQ',       price: 17928.92, changePct:  1.07 },
-  { name: 'Russell 2000', price: 2010.45,  changePct:  0.84 },
+  { name: 'S&P 500',      symbol: '^GSPC', price: 5659.91,  changePct:  0.58 },
+  { name: 'Dow Jones',    symbol: '^DJI',  price: 42410.10, changePct:  0.62 },
+  { name: 'NASDAQ',       symbol: '^IXIC', price: 17928.92, changePct:  1.07 },
+  { name: 'Russell 2000', symbol: '^RUT',  price: 2010.45,  changePct:  0.84 },
+  { name: 'Nasdaq 100',   symbol: 'QQQ',   price: 475.38,   changePct:  1.23 },
 ];
 const SNAPSHOT_MARKET_VIEW = [
   { symbol: 'NVDA', name: 'NVIDIA Corp',      price: 112.50, changePct:  2.14 },
@@ -3262,6 +3264,9 @@ export default function Dashboard() {
   const [marketTickers, setMarketTickers] = useState({ indices: [], active: [] });
   const [sp500Candles, setSp500Candles] = useState([]);
   const [sp500Period, setSp500Period] = useState('1y');
+  const selectedIndexTickerRef = useRef('^GSPC');
+  const [selectedIndexTicker, setSelectedIndexTickerState] = useState('^GSPC');
+  const [selectedIndexName, setSelectedIndexName] = useState('S&P 500');
   const [learnCategory, setLearnCategory] = useState(() => {
     try {
       const h = new Set(JSON.parse(localStorage.getItem(`pl_hidden_subtabs_${user?.id}`) || '[]'));
@@ -3436,6 +3441,16 @@ export default function Dashboard() {
     if (!user?.id) return false;
     return localStorage.getItem(`pl_onboarded_${user.id}`) !== '1';
   });
+  const [scrollToManual, setScrollToManual] = useState(false);
+  const manualAccountsRef = useRef(null);
+  useEffect(() => {
+    if (scrollToManual && panel === 'settings' && manualAccountsRef.current) {
+      setTimeout(() => {
+        manualAccountsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setScrollToManual(false);
+      }, 100);
+    }
+  }, [scrollToManual, panel]);
   const [taxIncome, setTaxIncome] = useState('65000');
   const [taxFiling, setTaxFiling] = useState('single');
   const [schHours,      setSchHours]      = useState('45');
@@ -3822,6 +3837,20 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
   useEffect(() => { if (cmdOpen) setTimeout(() => cmdInputRef.current?.focus(), 30); }, [cmdOpen]);
+
+  // Show onboarding for new users
+  useEffect(() => {
+    if (!user?.id) return;
+    if (localStorage.getItem(`pl_onboarded_${user.id}`)) return;
+    setShowOnboarding(true);
+  }, [user?.id]);
+
+  // Auto-dismiss onboarding if user already has linked accounts (returning user)
+  useEffect(() => {
+    if (!showOnboarding || accounts.length === 0) return;
+    localStorage.setItem(`pl_onboarded_${user?.id}`, '1');
+    setShowOnboarding(false);
+  }, [showOnboarding, accounts.length]);
 
   // Handle return from Stripe checkout or email verification
   useEffect(() => {
@@ -4304,7 +4333,7 @@ export default function Dashboard() {
   const fetchSP500 = useCallback(async (period) => {
     setSp500Period(period);
     try {
-      const r = await api.get('/market/sp500', { params: { period } });
+      const r = await api.get('/market/sp500', { params: { period, symbol: selectedIndexTickerRef.current } });
       setSp500Candles(r.data.candles || []);
     } catch { /* silent */ }
   }, []);
@@ -4722,27 +4751,40 @@ export default function Dashboard() {
 
       {/* ── ONBOARDING ─────────────────────────────────── */}
       {showOnboarding && (() => {
+        const isProfOrAdmin = isProfessor || isAdmin;
+        const isStudentRole = user?.role === 'student';
         const dismiss = (panelKey, edu) => {
           localStorage.setItem(`pl_onboarded_${user.id}`, '1');
           setShowOnboarding(false);
           if (edu !== undefined) switchEduMode(edu);
           if (panelKey) setPanel(panelKey);
         };
-        const isProfOrAdmin = isProfessor || isAdmin;
-        const isStudentRole = user?.role === 'student';
+
+        // Full multi-step onboarding for regular users
+        if (!isProfOrAdmin && !isStudentRole) {
+          return (
+            <Onboarding
+              user={user}
+              isPremium={isPremium}
+              onComplete={() => { localStorage.setItem(`pl_onboarded_${user?.id}`, '1'); setShowOnboarding(false); }}
+              onOpenUpgrade={() => { localStorage.setItem(`pl_onboarded_${user?.id}`, '1'); setShowOnboarding(false); setShowUpgrade(true); }}
+              onOpenConnect={() => { localStorage.setItem(`pl_onboarded_${user?.id}`, '1'); setShowOnboarding(false); setShowConnectModal(true); }}
+            />
+          );
+        }
+
+        // Simple role-based welcome for professors and students
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
             <div style={{ background: CARD_BG, border: BORDER, borderRadius: 16, padding: 36, width: '100%', maxWidth: 480, boxShadow: '0 32px 80px rgba(0,0,0,0.6)' }}>
               <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 6 }}>Welcome to PeakLedger{user?.name ? `, ${user.name.split(' ')[0]}` : ''}</div>
               <div style={{ fontSize: 14, color: TEXT2, marginBottom: 32, lineHeight: 1.6 }}>
-                {isProfOrAdmin && !isStudentRole
+                {isProfOrAdmin
                   ? 'Your professor account is ready. Set up your course or explore the platform first.'
-                  : isStudentRole
-                  ? 'Your student account is ready. Head to your courses or explore the finance dashboard first.'
-                  : 'Your account is ready. Connect your accounts to get started, or explore with demo data.'}
+                  : 'Your student account is ready. Head to your courses or explore the finance dashboard first.'}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {isProfOrAdmin && !isStudentRole && <>
+                {isProfOrAdmin && <>
                   <button onClick={() => dismiss('prof-dashboard', true)}
                     style={{ padding: '14px 20px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 10, color: GREEN, fontSize: 14, fontWeight: 700, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>⊟ Set up my course</span><span style={{ opacity: 0.6 }}>→</span>
@@ -4760,16 +4802,6 @@ export default function Dashboard() {
                   <button onClick={() => dismiss('overview', false)}
                     style={{ padding: '14px 20px', background: MUTED, border: BORDER, borderRadius: 10, color: TEXT2, fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>⊞ Explore the finance dashboard</span><span style={{ opacity: 0.6 }}>→</span>
-                  </button>
-                </>}
-                {!isProfOrAdmin && !isStudentRole && <>
-                  <button onClick={() => { dismiss('overview', false); isPremium ? setShowConnectModal(true) : setShowUpgrade(true); }}
-                    style={{ padding: '14px 20px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 10, color: BLUE, fontSize: 14, fontWeight: 700, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>{isPremium ? '🔗 Connect my accounts' : 'Get Premium'}</span><span style={{ opacity: 0.6 }}>→</span>
-                  </button>
-                  <button onClick={() => dismiss('overview', false)}
-                    style={{ padding: '14px 20px', background: MUTED, border: BORDER, borderRadius: 10, color: TEXT2, fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>⊞ Explore with demo data</span><span style={{ opacity: 0.6 }}>→</span>
                   </button>
                 </>}
               </div>
@@ -7222,7 +7254,7 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Banking</h1>
                     {isPremium && (
-                      <button onClick={() => setPanel('settings')}
+                      <button onClick={() => { setPanel('settings'); setScrollToManual(true); }}
                         style={{ padding: '7px 14px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: GREEN, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                         + Manual Account
                       </button>
@@ -10438,7 +10470,7 @@ export default function Dashboard() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 16, marginBottom: 24 }}>
                   <div data-tour="markets-sp500" className="lc" style={CARD}>
-                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>S&P 500</div>
+                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{selectedIndexName}</div>
                     <SP500Chart candles={sp500Candles} period={sp500Period} onPeriodChange={fetchSP500} />
                   </div>
                   <div data-tour="markets-fg" className="lc" style={CARD}>
@@ -10450,27 +10482,37 @@ export default function Dashboard() {
 
                 <div>
                 {/* Indices row */}
-                {marketTickers.indices.length > 0 && (
-                  <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13 }}>Indices</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 12 }}>
-                      {marketTickers.indices.map((t, i) => {
-                        const up = (t.changePct || 0) >= 0;
-                        return (
-                          <div key={i} style={{ padding: '12px 14px', background: DARK, borderRadius: 8, border: BORDER }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: TEXT2, marginBottom: 6 }}>{t.name}</div>
-                            <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-                              {(t.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {(() => {
+                  const liveIndices = marketTickers.indices;
+                  const displayIndices = liveIndices.length > 0 ? liveIndices : SNAPSHOT_INDICES;
+                  return (
+                    <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 13 }}>Indices</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 12 }}>
+                        {displayIndices.map((t, i) => {
+                          const up = (t.changePct || 0) >= 0;
+                          const isSelected = selectedIndexTicker === t.symbol;
+                          return (
+                            <div key={i} onClick={() => {
+                              selectedIndexTickerRef.current = t.symbol;
+                              setSelectedIndexTickerState(t.symbol);
+                              setSelectedIndexName(t.name);
+                              fetchSP500(sp500Period);
+                            }} style={{ padding: '12px 14px', background: isSelected ? 'rgba(77,163,255,0.1)' : DARK, borderRadius: 8, border: isSelected ? '1px solid rgba(77,163,255,0.4)' : BORDER, cursor: 'pointer', transition: 'all 0.15s' }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? BLUE : TEXT2, marginBottom: 6 }}>{t.name}</div>
+                              <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+                                {(t.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: up ? GREEN : RED }}>
+                                {up ? '▲' : '▼'} {Math.abs(t.changePct || 0).toFixed(2)}%
+                              </div>
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: up ? GREEN : RED }}>
-                              {up ? '▲' : '▼'} {Math.abs(t.changePct || 0).toFixed(2)}%
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* View selector + table */}
                 <div className="lc" style={CARD}>
@@ -12314,7 +12356,7 @@ export default function Dashboard() {
 
                 <ConnectedAccountsCard onFixConnection={openUpdateMode} />
 
-                {isPremium && <ManualAccountsCard onAccountsChanged={fetchAll} />}
+                {isPremium && <div ref={manualAccountsRef}><ManualAccountsCard onAccountsChanged={fetchAll} /></div>}
 
                 {isPremium && !isAdmin && !isProfessor && (
                   <div style={{ ...CARD, marginBottom: 16 }}>

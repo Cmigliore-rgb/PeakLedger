@@ -3874,10 +3874,12 @@ export default function Dashboard() {
   // Check notification conditions after data loads
   useEffect(() => {
     if (!notifPrefs.budgetAlert && !notifPrefs.goalAlert && !notifPrefs.lowBalanceAlert) return;
-    const COOLDOWN = 24 * 60 * 60 * 1000;
-    const lastSent = JSON.parse(localStorage.getItem(`pl_notif_sent_${user?.id}`) || '{}');
     const now = Date.now();
-    const trigger = async (type, subject, details, key) => {
+    const mo = new Date().toISOString().slice(0, 7); // "2026-05" — scope keys to month
+    const lastSent = JSON.parse(localStorage.getItem(`pl_notif_sent_${user?.id}`) || '{}');
+    const COOLDOWN = 7 * 24 * 60 * 60 * 1000; // 7-day secondary guard within a month
+    const trigger = async (type, subject, details, baseKey) => {
+      const key = `${baseKey}_${mo}`;
       if (lastSent[key] && now - lastSent[key] < COOLDOWN) return;
       try {
         await api.post('/notifications/send', { type, subject, details });
@@ -4598,28 +4600,19 @@ export default function Dashboard() {
       )}
 
       {/* ── SIDEBAR ─────────────────────────────────────── */}
-      <aside style={{ width: sidebarCollapsed ? 48 : 220, flexShrink: 0, background: SIDE_BG, borderRight: BORDER, display: isMobile ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.25s ease' }}>
-        <div data-tour="brand" style={{ width: sidebarCollapsed ? 48 : 220, padding: sidebarCollapsed ? '12px 0' : '18px 16px 16px', borderBottom: BORDER, display: 'flex', flexDirection: sidebarCollapsed ? 'column' : 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <div style={{ flex: sidebarCollapsed ? 'none' : 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-            <img src={logoSrc} alt="" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0 }} />
-            {!sidebarCollapsed && <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>PeakLedger</span>}
-          </div>
+      <aside style={{ width: sidebarCollapsed ? 48 : 240, flexShrink: 0, background: SIDE_BG, borderRight: BORDER, display: isMobile ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.25s ease' }}>
+        <div data-tour="brand" style={{ padding: sidebarCollapsed ? '12px 0' : '14px 14px 12px', borderBottom: BORDER, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <img src={logoSrc} alt="" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0 }} />
+          {!sidebarCollapsed && <span style={{ flex: 1, fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: TEXT, whiteSpace: 'nowrap', minWidth: 0 }}>PeakLedger</span>}
           {!sidebarCollapsed && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-              {streak > 0 && (
-                <div title={`${streak}-day login streak`} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 20, cursor: 'default', flexShrink: 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24' }}>{streak}d</span>
-                </div>
+            <button onClick={() => setNotifPanelOpen(v => !v)} style={{ position: 'relative', background: notifPanelOpen ? 'rgba(77,163,255,0.12)' : 'transparent', border: notifPanelOpen ? `1px solid rgba(77,163,255,0.3)` : '1px solid transparent', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style={{ color: TEXT2 }} xmlns="http://www.w3.org/2000/svg"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+              {inboxNotifs.filter(n => !n.read).length > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, background: RED, borderRadius: 8, fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: `2px solid ${SIDE_BG}` }}>
+                  {inboxNotifs.filter(n => !n.read).length > 9 ? '9+' : inboxNotifs.filter(n => !n.read).length}
+                </span>
               )}
-              <button onClick={() => setNotifPanelOpen(v => !v)} style={{ position: 'relative', background: notifPanelOpen ? 'rgba(77,163,255,0.12)' : 'transparent', border: notifPanelOpen ? `1px solid rgba(77,163,255,0.3)` : '1px solid transparent', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style={{ color: TEXT2 }} xmlns="http://www.w3.org/2000/svg"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-                {inboxNotifs.filter(n => !n.read).length > 0 && (
-                  <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, background: RED, borderRadius: 8, fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: `2px solid ${SIDE_BG}` }}>
-                    {inboxNotifs.filter(n => !n.read).length > 9 ? '9+' : inboxNotifs.filter(n => !n.read).length}
-                  </span>
-                )}
-              </button>
-            </div>
+            </button>
           )}
           <button onClick={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('pl_sidebar_collapsed', String(next)); } catch {} return next; })} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: BLUE, flexShrink: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

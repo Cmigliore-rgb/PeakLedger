@@ -900,6 +900,9 @@ function TickerBar({ indices, active }) {
 function SP500Chart({ candles, period, onPeriodChange, hidePeriods }) {
   const [hoverIdx, setHoverIdx] = useState(null);
   const svgRef = useRef(null);
+  const uidRef = useRef(null);
+  if (!uidRef.current) uidRef.current = Math.random().toString(36).slice(2, 8);
+  const uid = uidRef.current;
 
   const PERIODS = [
     { key: '1d',  label: '1D'  }, { key: '5d',  label: '5D'  },
@@ -938,11 +941,13 @@ function SP500Chart({ candles, period, onPeriodChange, hidePeriods }) {
   const first = values[0], last = values[n - 1];
   const lineColor = last >= first ? GREEN : RED;
   const fillId = last >= first ? 'sp5g' : 'sp5r';
+  const baselineY = toY(first);
 
   const points = candles.map((c, i) => `${toX(i).toFixed(1)},${toY(c.close).toFixed(1)}`).join(' ');
-  const areaPath = `M ${PAD.left} ${PAD.top + iH} ` +
+  // Area closes at baseline so green/red clip regions work correctly
+  const areaPath = `M ${PAD.left} ${baselineY.toFixed(1)} ` +
     candles.map((c, i) => `L ${toX(i).toFixed(1)} ${toY(c.close).toFixed(1)}`).join(' ') +
-    ` L ${toX(n - 1).toFixed(1)} ${PAD.top + iH} Z`;
+    ` L ${toX(n - 1).toFixed(1)} ${baselineY.toFixed(1)} Z`;
 
   const longPer  = ['5y','max'].includes(period);
   const medPer   = ['1y','ytd','6mo'].includes(period);
@@ -1031,10 +1036,12 @@ function SP500Chart({ candles, period, onPeriodChange, hidePeriods }) {
         onTouchMove={e => { e.preventDefault(); setHoverIdx(getIdx(e.touches[0].clientX)); }}
         onTouchEnd={() => setHoverIdx(null)}>
         <defs>
-          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
-            <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
-          </linearGradient>
+          <clipPath id={`gc-${uid}`}>
+            <rect x={PAD.left} y={PAD.top} width={iW} height={Math.max(0, baselineY - PAD.top)} />
+          </clipPath>
+          <clipPath id={`lc-${uid}`}>
+            <rect x={PAD.left} y={baselineY} width={iW} height={Math.max(0, H - PAD.bottom - baselineY)} />
+          </clipPath>
         </defs>
         {[0, 0.5, 1].map(t => {
           const v = minV + t * range, y = toY(v);
@@ -1047,7 +1054,9 @@ function SP500Chart({ candles, period, onPeriodChange, hidePeriods }) {
             </g>
           );
         })}
-        <path d={areaPath} fill={`url(#${fillId})`} />
+        <path d={areaPath} fill={GREEN} fillOpacity={0.18} clipPath={`url(#gc-${uid})`} />
+        <path d={areaPath} fill={RED}   fillOpacity={0.18} clipPath={`url(#lc-${uid})`} />
+        <line x1={PAD.left} x2={W - PAD.right} y1={baselineY} y2={baselineY} stroke={BORDER_C} strokeWidth={1} strokeDasharray="4 3" />
         <polyline points={points} fill="none" stroke={lineColor} strokeWidth={1.8} strokeLinejoin="round" />
         {hoverIdx != null ? (
           <>
@@ -3108,6 +3117,8 @@ export default function Dashboard() {
   });
   const [settingsAnchor, setSettingsAnchor] = useState(null);
   const [hoveredNav, setHoveredNav] = useState(null);
+  const [navHoverY, setNavHoverY] = useState(0);
+  const [navHoverLabel, setNavHoverLabel] = useState('');
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
   const [cmdIdx, setCmdIdx] = useState(0);
@@ -4645,9 +4656,8 @@ export default function Dashboard() {
                       onDragOver={e => e.preventDefault()}
                       onDrop={e => { e.preventDefault(); const [, srcId] = e.dataTransfer.getData('text/plain').split('|||'); if (srcId !== key) handleReorder('nav-order', _NAV_DEF)(srcId, key); }}
                       onClick={() => { setPanel(key); switchEduMode(false); }}
-                      onMouseEnter={() => setHoveredNav(key)}
-                      onMouseLeave={() => setHoveredNav(null)}
-                      title={sidebarCollapsed ? label : undefined}
+                      onMouseEnter={e => { setHoveredNav(key); if (sidebarCollapsed) { const r = e.currentTarget.getBoundingClientRect(); setNavHoverY(r.top + r.height / 2); setNavHoverLabel(label); } }}
+                      onMouseLeave={() => { setHoveredNav(null); setNavHoverLabel(''); }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: sidebarCollapsed ? 0 : 10, padding: sidebarCollapsed ? '10px 0' : '10px 20px', background: (panel === key && !eduMode) ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', borderLeft: (panel === key && !eduMode) ? `2px solid ${BLUE}` : '2px solid transparent', color: (panel === key && !eduMode) ? TEXT : TEXT2, cursor: 'grab', fontSize: 13, fontWeight: (panel === key && !eduMode) ? 600 : 400, textAlign: 'left', transition: 'all 0.15s' }}>
                       <span style={{ fontSize: 14, opacity: locked ? 0.4 : 1, display: 'inline-block', transition: 'transform 0.15s', transform: hoveredNav === key ? 'translateX(3px) scale(1.15)' : 'none' }}>{icon}</span>
                       {!sidebarCollapsed && <span style={{ flex: 1 }}>{label}</span>}
@@ -4676,9 +4686,8 @@ export default function Dashboard() {
               </div>}
               {NAV.filter(n => n.section === 'education' && !hiddenPanels.has(n.key)).map(({ key, label, icon }) => (
                 <button key={key} data-tour={`nav-${key}`} onClick={() => { setPanel(key); switchEduMode(true); }}
-                  onMouseEnter={() => setHoveredNav(key)}
-                  onMouseLeave={() => setHoveredNav(null)}
-                  title={sidebarCollapsed ? label : undefined}
+                  onMouseEnter={e => { setHoveredNav(key); if (sidebarCollapsed) { const r = e.currentTarget.getBoundingClientRect(); setNavHoverY(r.top + r.height / 2); setNavHoverLabel(label); } }}
+                  onMouseLeave={() => { setHoveredNav(null); setNavHoverLabel(''); }}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: sidebarCollapsed ? 0 : 10, padding: sidebarCollapsed ? '10px 0' : '10px 20px', background: panel === key ? 'rgba(74,222,128,0.07)' : 'transparent', border: 'none', borderLeft: panel === key ? `2px solid ${GREEN}` : '2px solid transparent', color: panel === key ? GREEN : TEXT2, cursor: 'pointer', fontSize: 13, fontWeight: panel === key ? 600 : 400, textAlign: 'left', transition: 'all 0.15s' }}>
                   <span style={{ fontSize: 14, display: 'inline-block', transition: 'transform 0.15s', transform: hoveredNav === key ? 'translateX(3px) scale(1.15)' : 'none' }}>{icon}</span>
                   {!sidebarCollapsed && <span>{label}</span>}
@@ -4686,9 +4695,8 @@ export default function Dashboard() {
               ))}
               {effectiveProfessor && (
                 <button onClick={() => { setPanel('prof-dashboard'); switchEduMode(true); }}
-                  onMouseEnter={() => setHoveredNav('prof-dashboard')}
-                  onMouseLeave={() => setHoveredNav(null)}
-                  title={sidebarCollapsed ? 'Professor Hub' : undefined}
+                  onMouseEnter={e => { setHoveredNav('prof-dashboard'); if (sidebarCollapsed) { const r = e.currentTarget.getBoundingClientRect(); setNavHoverY(r.top + r.height / 2); setNavHoverLabel('Professor Hub'); } }}
+                  onMouseLeave={() => { setHoveredNav(null); setNavHoverLabel(''); }}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: sidebarCollapsed ? 0 : 10, padding: sidebarCollapsed ? '10px 0' : '10px 20px', background: panel === 'prof-dashboard' ? 'rgba(74,222,128,0.07)' : 'transparent', border: 'none', borderLeft: panel === 'prof-dashboard' ? `2px solid ${GREEN}` : '2px solid transparent', color: panel === 'prof-dashboard' ? GREEN : TEXT2, cursor: 'pointer', fontSize: 13, fontWeight: panel === 'prof-dashboard' ? 600 : 400, textAlign: 'left', transition: 'all 0.15s' }}>
                   <span style={{ fontSize: 14, display: 'inline-block', transition: 'transform 0.15s', transform: hoveredNav === 'prof-dashboard' ? 'translateX(3px) scale(1.15)' : 'none' }}>⊟</span>
                   {!sidebarCollapsed && <span>Professor Hub</span>}
@@ -4769,6 +4777,13 @@ export default function Dashboard() {
           </div>
         )}
       </aside>
+
+      {/* Sidebar collapsed nav tooltip */}
+      {sidebarCollapsed && navHoverLabel && (
+        <div style={{ position: 'fixed', left: 56, top: navHoverY - 16, zIndex: 2000, background: CARD_BG, border: BORDER, borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, color: TEXT, pointerEvents: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.5)', whiteSpace: 'nowrap' }}>
+          {navHoverLabel}
+        </div>
+      )}
 
       {/* ── MOBILE BOTTOM TAB BAR + MORE SHEET ─────────── */}
       {isMobile && (() => {
@@ -6241,6 +6256,20 @@ export default function Dashboard() {
                         <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{card.label}</div>
                         <div style={{ fontSize: isMobile ? 20 : 30, fontWeight: 700, margin: isMobile ? 0 : '8px 0 4px', letterSpacing: '-1px' }}>{card.value}</div>
                         {!isMobile && <div style={{ fontSize: 12, color: TEXT2 }}>{card.sub}</div>}
+                        {!isMobile && card.key === 'nw' && (() => {
+                          const snaps = (isDemoData ? DEMO_SNAPSHOTS : snapshots).slice(-12);
+                          if (snaps.length < 2) return null;
+                          const vals = snaps.map(s => s.net_worth);
+                          const minV = Math.min(...vals), maxV = Math.max(...vals), rng = maxV - minV || 1;
+                          const SW = 84, SH = 28;
+                          const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * SW).toFixed(1)},${(SH - ((v - minV) / rng) * SH).toFixed(1)}`).join(' ');
+                          const isUp = vals[vals.length - 1] >= vals[0];
+                          return (
+                            <svg width={SW} height={SH} viewBox={`0 0 ${SW} ${SH}`} style={{ display: 'block', marginTop: 10, opacity: 0.85 }}>
+                              <polyline points={pts} fill="none" stroke={isUp ? GREEN : RED} strokeWidth={1.5} strokeLinejoin="round" />
+                            </svg>
+                          );
+                        })()}
                       </div>
                     ));
                   })()}
@@ -6609,21 +6638,43 @@ export default function Dashboard() {
                         <div style={{ fontSize: 12, color: TEXT3 }}>Connect a bank account to see your spending here.</div>
                       </div>
                     ) : (
-                      <div className="card-scroll" style={{ maxHeight: 260 }}>
-                        {transactions.map((t, i, arr) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${BORDER_C}` : 'none', gap: 10 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                              <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={32} radius={8} />
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.merchant_name || t.name}</div>
-                                <div style={{ fontSize: 12, color: TEXT2 }}>{fmtDate(t.date)} · {fmtCat(resolveCategory(t))}</div>
+                      <div className="card-scroll">
+                        {(() => {
+                          const todayStr = new Date().toISOString().slice(0, 10);
+                          const yestStr  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                          const items = [];
+                          let lastDate = null;
+                          transactions.forEach((t, i) => {
+                            const d = (t.date || '').slice(0, 10);
+                            if (d !== lastDate) {
+                              const label = d === todayStr ? 'Today' : d === yestStr ? 'Yesterday'
+                                : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                              items.push({ type: 'header', label, key: `h-${d}` });
+                              lastDate = d;
+                            }
+                            items.push({ type: 'txn', t, i });
+                          });
+                          return items.map(item => {
+                            if (item.type === 'header') return (
+                              <div key={item.key} style={{ padding: '10px 0 4px', fontSize: 10, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '0.7px' }}>{item.label}</div>
+                            );
+                            const { t, i } = item;
+                            return (
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${BORDER_C}`, gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                  <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={32} radius={8} />
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.merchant_name || t.name}</div>
+                                    <div style={{ fontSize: 12, color: TEXT2 }}>{fmtCat(resolveCategory(t))}</div>
+                                  </div>
+                                </div>
+                                <div style={{ fontWeight: 600, color: t.amount > 0 ? RED : GREEN, fontFamily: 'monospace', flexShrink: 0 }}>
+                                  {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
+                                </div>
                               </div>
-                            </div>
-                            <div style={{ fontWeight: 600, color: t.amount > 0 ? RED : GREEN, fontFamily: 'monospace', flexShrink: 0 }}>
-                              {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
-                            </div>
-                          </div>
-                        ))}
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </div>
@@ -8115,6 +8166,11 @@ export default function Dashboard() {
                                           <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: over ? RED : TEXT }}>
                                             {fmt(b.total)}{limit && !isEditing ? ` / ${fmt(limit)}` : ''}
                                           </span>
+                                          {limit && !isEditing && (
+                                            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color: over ? RED : GREEN, background: over ? `${RED}15` : `${GREEN}15`, padding: '2px 8px', borderRadius: 10, flexShrink: 0 }}>
+                                              {over ? `−${fmt(b.total - limit)}` : `${fmt(limit - b.total)} left`}
+                                            </span>
+                                          )}
                                           {isEditing ? (
                                             <>
                                               <input autoFocus value={limitInput} onChange={e => setLimitInput(e.target.value)}
@@ -8213,6 +8269,11 @@ export default function Dashboard() {
                                         <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: over ? RED : TEXT }}>
                                           {fmt(b.total)}{limit && !isEditing ? ` / ${fmt(limit)}` : ''}
                                         </span>
+                                        {limit && !isEditing && (
+                                          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color: over ? RED : GREEN, background: over ? `${RED}15` : `${GREEN}15`, padding: '2px 8px', borderRadius: 10, flexShrink: 0 }}>
+                                            {over ? `−${fmt(b.total - limit)}` : `${fmt(limit - b.total)} left`}
+                                          </span>
+                                        )}
                                         {isEditing ? (
                                           <>
                                             <input autoFocus value={limitInput} onChange={e => setLimitInput(e.target.value)}
@@ -9720,8 +9781,8 @@ export default function Dashboard() {
                         <table style={{ width:'100%', borderCollapse:'collapse', minWidth:480 }}>
                           <thead>
                             <tr style={{ borderBottom:BORDER }}>
-                              {['Ticker','Name','Shares','Price','Value','Change'].map(col=>(
-                                <th key={col} style={{ padding:'8px 12px', textAlign:['Shares','Price','Value','Change'].includes(col)?'right':'left', fontSize:11, color:TEXT2, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px' }}>{col}</th>
+                              {['Ticker','Name','Shares','Price','Value','Total Return','Change'].map(col=>(
+                                <th key={col} style={{ padding:'8px 12px', textAlign:['Shares','Price','Value','Total Return','Change'].includes(col)?'right':'left', fontSize:11, color:TEXT2, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px' }}>{col}</th>
                               ))}
                             </tr>
                           </thead>
@@ -9732,8 +9793,10 @@ export default function Dashboard() {
                               const qty=h.quantity||0, price=h.institution_price||0, value=qty*price;
                               const ext=extendedTickerData[ticker]||{};
                               const periodPct=ticker!=='—'?ext[activePeriodField]??null:null;
-                              // Dollar change: exact formula (value * p/100 / (1 + p/100))
                               const dollarChg=periodPct!=null ? value*(periodPct/100)/(1+periodPct/100) : null;
+                              const costBasis=h.cost_basis||0;
+                              const totalReturn=costBasis>0 ? value-costBasis : null;
+                              const totalReturnPct=costBasis>0 ? ((value-costBasis)/costBasis)*100 : null;
                               const clickable=ticker!=='—';
                               return (
                                 <tr key={i} className="lr" style={{ borderBottom:`1px solid ${BORDER_C}`, cursor:clickable?'pointer':'default' }}
@@ -9748,6 +9811,18 @@ export default function Dashboard() {
                                   <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{qty.toFixed(3)}</td>
                                   <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{fmt(price)}</td>
                                   <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontFamily:'monospace' }}>{fmt(value)}</td>
+                                  <td style={{ padding:'10px 12px', textAlign:'right' }}>
+                                    {totalReturnPct==null ? <span style={{ color:TEXT3 }}>—</span> : (
+                                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
+                                        <span style={{ fontWeight:700, fontSize:12, color:totalReturnPct>=0?GREEN:RED }}>
+                                          {totalReturnPct>=0?'▲':'▼'} {Math.abs(totalReturnPct).toFixed(2)}%
+                                        </span>
+                                        <span style={{ fontSize:11, color:totalReturn>=0?GREEN:RED, fontFamily:'monospace' }}>
+                                          {totalReturn>=0?'+':''}{fmt(totalReturn)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </td>
                                   <td style={{ padding:'10px 12px', textAlign:'right' }}>
                                     {periodPct==null ? <span style={{ color:TEXT3 }}>—</span> : (
                                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>

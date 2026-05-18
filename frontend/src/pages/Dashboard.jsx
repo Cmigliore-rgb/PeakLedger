@@ -2521,6 +2521,43 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
   );
 }
 
+function Confetti({ onDone }) {
+  const cvRef = React.useRef(null);
+  React.useEffect(() => {
+    const cv = cvRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    cv.width = window.innerWidth; cv.height = window.innerHeight;
+    const COLS = ['#4DA3FF', '#4ADE80', '#FBBF24', '#F87171', '#A78BFA', '#FB923C', '#34D399'];
+    const pieces = Array.from({ length: 120 }, () => ({
+      x: Math.random() * cv.width, y: -10 - Math.random() * cv.height * 0.35,
+      w: 6 + Math.random() * 8, h: 3 + Math.random() * 4,
+      color: COLS[Math.floor(Math.random() * COLS.length)],
+      vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 3,
+      rot: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.14,
+    }));
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      let alive = false;
+      for (const p of pieces) {
+        p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += 0.07;
+        if (p.y < cv.height + 20) alive = true;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - p.y / (cv.height * 0.88));
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      }
+      if (alive) raf = requestAnimationFrame(draw); else onDone?.();
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={cvRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999 }} />;
+}
+
 // key: 'YYYY-M-D' (no zero-padding)
 const COURSE_CALENDAR_EVENTS = {
   '2026-1-25': [{ type: 'quiz',       label: 'Quiz 1' }],
@@ -3300,6 +3337,8 @@ export default function Dashboard() {
   const [navHoverY, setNavHoverY] = useState(0);
   const [navHoverLabel, setNavHoverLabel] = useState('');
   const [stableTourSteps, setStableTourSteps] = useState([]);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [showMonthlyReview, setShowMonthlyReview] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
   const [cmdIdx, setCmdIdx] = useState(0);
@@ -3640,6 +3679,9 @@ export default function Dashboard() {
     } catch { return 'banking'; }
   });
   const [selectedBankAccount, setSelectedBankAccount] = useState(null);
+  const [txnSearch, setTxnSearch] = useState('');
+  const [txnCatFilter, setTxnCatFilter] = useState('');
+  const [txnDateFilter, setTxnDateFilter] = useState('all');
   const [selectedInstitution, setSelectedInstitution] = useState(null);
   const [insightsTab, setInsightsTab] = useState(() => {
     try {
@@ -5881,6 +5923,101 @@ export default function Dashboard() {
       })()}
 
       {/* ── MAIN CONTENT ────────────────────────────────── */}
+      {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+
+      {showMonthlyReview && (() => {
+        const now = new Date();
+        const monthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lmEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        const mTxns  = transactions.filter(t => { const d = new Date(t.date); return d >= mStart && d <= now; });
+        const lmTxns = transactions.filter(t => { const d = new Date(t.date); return d >= lmStart && d <= lmEnd; });
+        const mInc  = mTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const mExp  = mTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+        const mSave = mInc - mExp;
+        const mRate = mInc > 0 ? Math.round((mSave / mInc) * 100) : null;
+        const lmInc = lmTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const lmExp = lmTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+        const incChg = lmInc > 0 ? Math.round(((mInc - lmInc) / lmInc) * 100) : null;
+        const expChg = lmExp > 0 ? Math.round(((mExp - lmExp) / lmExp) * 100) : null;
+        const catMap = {};
+        mTxns.filter(t => t.amount > 0).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
+        const topCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const rateColor = mRate === null ? TEXT2 : mRate >= 20 ? GREEN : mRate >= 0 ? YELLOW : RED;
+        const completedGoals = (goals || []).filter(g => { const a = accounts.find(ac => ac.account_id === g.accountId); return a && a.balances?.current >= g.target; });
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowMonthlyReview(false)}>
+            <div style={{ background: BG, border: BORDER, borderRadius: 16, padding: 32, maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: BLUE, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>Monthly Review</div>
+                  <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>Your {monthName}</h2>
+                </div>
+                <button onClick={() => setShowMonthlyReview(false)} style={{ background: MUTED, border: BORDER, borderRadius: '50%', width: 30, height: 30, cursor: 'pointer', color: TEXT2, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+                {[
+                  { label: 'Income', value: fmt(mInc), chg: incChg, up: true },
+                  { label: 'Spending', value: fmt(mExp), chg: expChg, up: false },
+                  { label: 'Saved', value: mSave >= 0 ? fmt(mSave) : `−${fmt(Math.abs(mSave))}`, color: mSave >= 0 ? GREEN : RED },
+                  { label: 'Savings Rate', value: mRate !== null ? `${mRate}%` : '—', color: rateColor },
+                ].map(({ label, value, chg, up, color }) => (
+                  <div key={label} style={{ ...CARD, padding: '16px 18px' }}>
+                    <div style={{ fontSize: 11, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px', color: color || TEXT }}>{value}</div>
+                    {chg !== null && chg !== undefined && (
+                      <div style={{ fontSize: 11, color: ((up && chg >= 0) || (!up && chg <= 0)) ? GREEN : RED, marginTop: 4, fontWeight: 600 }}>
+                        {chg > 0 ? '+' : ''}{chg}% vs last month
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {topCats.length > 0 && (
+                <div style={{ ...CARD, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: TEXT2, marginBottom: 12 }}>Top Spending Categories</div>
+                  {topCats.map(([cat, amt], i) => (
+                    <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < topCats.length - 1 ? `1px solid ${BORDER_C}` : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 4, height: 28, borderRadius: 2, background: [BLUE, GREEN, YELLOW, RED, '#A78BFA'][i] }} />
+                        <span style={{ fontSize: 13 }}>{cat}</span>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: RED }}>−{fmt(amt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {goals?.length > 0 && (
+                <div style={{ ...CARD }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: TEXT2, marginBottom: 12 }}>Goals Progress</div>
+                  {goals.map(g => {
+                    const a = accounts.find(ac => ac.account_id === g.accountId);
+                    const cur = a ? (a.balances?.current || 0) : 0;
+                    const pct = Math.min((cur / g.target) * 100, 100);
+                    const done = cur >= g.target;
+                    return (
+                      <div key={g.id} style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 600 }}>{g.name}</span>
+                          <span style={{ color: done ? GREEN : TEXT2 }}>{done ? 'Complete' : `${pct.toFixed(0)}%`}</span>
+                        </div>
+                        <div style={{ height: 5, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${a ? pct : 0}%`, background: done ? GREEN : BLUE, borderRadius: 3, transition: 'width 0.4s' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {showTour && stableTourSteps.length > 0 && (() => {
         const _tourSteps = stableTourSteps;
         const _applyStep = (s) => {
@@ -6391,7 +6528,10 @@ export default function Dashboard() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24 }}>
                   <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{_g}, {_n}</h1>
-                  {_ovCustom && <button onClick={() => resetLayout('overview')} style={{ background: 'none', border: 'none', color: TEXT3, fontSize: 11, cursor: 'pointer', padding: 0 }}>Reset layout</button>}
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    {!isDemoData && <button onClick={() => setShowMonthlyReview(true)} style={{ background: 'none', border: 'none', color: BLUE, fontSize: 12, cursor: 'pointer', fontWeight: 600, padding: 0 }}>{new Date().toLocaleDateString('en-US', { month: 'long' })} Review</button>}
+                    {_ovCustom && <button onClick={() => resetLayout('overview')} style={{ background: 'none', border: 'none', color: TEXT3, fontSize: 11, cursor: 'pointer', padding: 0 }}>Reset layout</button>}
+                  </div>
                 </div>
 
                 {isAdmin && !viewAs && isDemoData && !connectBannerDismissed && (
@@ -7243,42 +7383,91 @@ export default function Dashboard() {
                       </div>
                     )}
                     <div className="lc" style={CARD}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <div style={{ fontWeight: 600 }}>Transactions</div>
-                        <span style={{ fontSize: 12, color: TEXT2 }}>{acctTxns.length} transactions</span>
+                      {/* ── Filter bar ── */}
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <input
+                          placeholder="Search merchant..."
+                          value={txnSearch}
+                          onChange={e => setTxnSearch(e.target.value)}
+                          style={{ flex: '1 1 140px', minWidth: 120, padding: '6px 10px', borderRadius: 7, border: BORDER, background: DARK, color: TEXT, fontSize: 12, outline: 'none' }}
+                        />
+                        {(() => {
+                          const cats = [...new Set(acctTxns.map(t => fmtCat(resolveCategory(t))).filter(Boolean))].sort();
+                          return (
+                            <select value={txnCatFilter} onChange={e => setTxnCatFilter(e.target.value)}
+                              style={{ flex: '1 1 130px', minWidth: 110, padding: '6px 10px', borderRadius: 7, border: BORDER, background: DARK, color: TEXT, fontSize: 12, cursor: 'pointer' }}>
+                              <option value="">All categories</option>
+                              {cats.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          );
+                        })()}
+                        <select value={txnDateFilter} onChange={e => setTxnDateFilter(e.target.value)}
+                          style={{ flex: '1 1 120px', minWidth: 100, padding: '6px 10px', borderRadius: 7, border: BORDER, background: DARK, color: TEXT, fontSize: 12, cursor: 'pointer' }}>
+                          <option value="all">All time</option>
+                          <option value="thisMonth">This month</option>
+                          <option value="lastMonth">Last month</option>
+                          <option value="last90">Last 90 days</option>
+                        </select>
+                        {(txnSearch || txnCatFilter || txnDateFilter !== 'all') && (
+                          <button onClick={() => { setTxnSearch(''); setTxnCatFilter(''); setTxnDateFilter('all'); }}
+                            style={{ padding: '6px 10px', background: 'none', border: BORDER, borderRadius: 7, color: TEXT3, fontSize: 12, cursor: 'pointer' }}>Clear</button>
+                        )}
                       </div>
-                      {acctTxns.length === 0 ? (
-                        <div style={{ color: TEXT2, textAlign: 'center', padding: 24 }}>No transactions for this account</div>
-                      ) : (
-                        <>
-                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                              <tr style={{ borderBottom: BORDER }}>
-                                {['Date', 'Merchant', 'Category', 'Amount'].map(h => (
-                                  <th key={h} style={{ padding: '6px 12px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {acctTxns.map((t, i) => (
-                                <tr key={i} className="lr" style={{ borderBottom: `1px solid ${BORDER_C}` }}>
-                                  <td style={{ padding: '8px 12px', color: TEXT2, fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(t.date)}</td>
-                                  <td style={{ padding: '8px 12px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={22} radius={5} />
-                                      <span style={{ fontSize: 13, fontWeight: 500 }}>{t.merchant_name || t.name}</span>
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: '8px 12px', color: TEXT2, fontSize: 12 }}>{fmtCat(resolveCategory(t)) || '—'}</td>
-                                  <td style={{ padding: '8px 12px', fontWeight: 600, color: t.amount > 0 ? RED : GREEN, textAlign: 'right', fontFamily: 'monospace', fontSize: 13 }}>
-                                    {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </>
-                      )}
+                      {(() => {
+                        const now = new Date();
+                        const filtered = acctTxns.filter(t => {
+                          if (txnSearch && !(t.merchant_name || t.name || '').toLowerCase().includes(txnSearch.toLowerCase())) return false;
+                          if (txnCatFilter && fmtCat(resolveCategory(t)) !== txnCatFilter) return false;
+                          if (txnDateFilter !== 'all') {
+                            const d = new Date(t.date + 'T12:00:00');
+                            if (txnDateFilter === 'thisMonth' && (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear())) return false;
+                            if (txnDateFilter === 'lastMonth') {
+                              const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                              if (d.getMonth() !== lm.getMonth() || d.getFullYear() !== lm.getFullYear()) return false;
+                            }
+                            if (txnDateFilter === 'last90' && d < new Date(Date.now() - 90 * 86400000)) return false;
+                          }
+                          return true;
+                        });
+                        return (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                              <div style={{ fontWeight: 600 }}>Transactions</div>
+                              <span style={{ fontSize: 12, color: TEXT2 }}>{filtered.length}{filtered.length !== acctTxns.length ? ` of ${acctTxns.length}` : ''} transactions</span>
+                            </div>
+                            {filtered.length === 0 ? (
+                              <div style={{ color: TEXT2, textAlign: 'center', padding: 24 }}>No transactions match your filters</div>
+                            ) : (
+                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: BORDER }}>
+                                    {['Date', 'Merchant', 'Category', 'Amount'].map(h => (
+                                      <th key={h} style={{ padding: '6px 12px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {filtered.map((t, i) => (
+                                    <tr key={i} className="lr" style={{ borderBottom: `1px solid ${BORDER_C}` }}>
+                                      <td style={{ padding: '8px 12px', color: TEXT2, fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(t.date)}</td>
+                                      <td style={{ padding: '8px 12px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={22} radius={5} />
+                                          <span style={{ fontSize: 13, fontWeight: 500 }}>{t.merchant_name || t.name}</span>
+                                        </div>
+                                      </td>
+                                      <td style={{ padding: '8px 12px', color: TEXT2, fontSize: 12 }}>{fmtCat(resolveCategory(t)) || '—'}</td>
+                                      <td style={{ padding: '8px 12px', fontWeight: 600, color: t.amount > 0 ? RED : GREEN, textAlign: 'right', fontFamily: 'monospace', fontSize: 13 }}>
+                                        {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -7319,7 +7508,7 @@ export default function Dashboard() {
                       )}
                       <div data-tour="banking-accounts" style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 8, marginTop: institutions.length > 1 ? 0 : 24 }}>
                         {visibleAccounts.map(a => (
-                          <div key={a.account_id} className="lc" onClick={() => { setSelectedBankAccount(a.account_id); setShowAllTxns(false); }}
+                          <div key={a.account_id} className="lc" onClick={() => { setSelectedBankAccount(a.account_id); setShowAllTxns(false); setTxnSearch(''); setTxnCatFilter(''); setTxnDateFilter('all'); }}
                             style={{ ...CARD, opacity: a.closed ? 0.6 : 1, cursor: 'pointer', padding: '18px 20px' }}>
                             {/* Row 1: account type pill + closed badge */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -9207,6 +9396,7 @@ export default function Dashboard() {
                   } else {
                     const res = await api.post('/goals', goalForm);
                     setGoals(prev => [...prev, res.data.goal]);
+                    setShowConfetti(true);
                   }
                   setShowGoalForm(false);
                   setEditingGoal(null);

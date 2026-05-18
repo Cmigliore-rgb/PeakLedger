@@ -248,7 +248,7 @@ router.get('/sp500', async (req, res) => {
   }
   if (!yahooFinance) return res.json({ candles: [] });
   try {
-    const daysMap = { '1d': 2, '5d': 7, '1mo': 35, '3mo': 95, '6mo': 185, '1y': 370, '5y': 1830, 'max': 7300 };
+    const daysMap = { '1d': 5, '5d': 7, '1mo': 35, '3mo': 95, '6mo': 185, '1y': 370, '5y': 1830, 'max': 7300 };
     const interval = (period === '1d' || period === '5d') ? '1h' : '1d';
     let period1;
     if (period === 'ytd') {
@@ -326,7 +326,7 @@ router.get('/portfolio-perf', async (req, res) => {
   }
 
   try {
-    const daysMap = { '1d': 2, '5d': 7, '1mo': 35, '3mo': 95, '6mo': 185, 'ytd': null, '1y': 370, '5y': 1830, 'max': 7300 };
+    const daysMap = { '1d': 5, '5d': 7, '1mo': 35, '3mo': 95, '6mo': 185, 'ytd': null, '1y': 370, '5y': 1830, 'max': 7300 };
     let period1;
     if (period === 'ytd') {
       period1 = new Date(new Date().getFullYear(), 0, 1);

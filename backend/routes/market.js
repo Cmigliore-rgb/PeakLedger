@@ -23,7 +23,7 @@ const quotesCache   = {};
 const YIELD_SYMBOLS = ['^IRX', '^FVX', '^TNX', '^TYX'];
 const YIELD_META    = { '^IRX': { label: '3M', years: 0.25 }, '^FVX': { label: '5Y', years: 5 }, '^TNX': { label: '10Y', years: 10 }, '^TYX': { label: '30Y', years: 30 } };
 
-const INDEX_NAMES = { '^GSPC': 'S&P 500', '^DJI': 'Dow 30', '^IXIC': 'Nasdaq', '^RUT': 'Russell 2K', 'QQQ': 'Nasdaq 100' };
+const INDEX_NAMES = { '^GSPC': 'S&P 500', '^DJI': 'Dow 30', '^IXIC': 'Nasdaq', '^RUT': 'Russell 2K', 'QQQ': 'QQQ' };
 
 // ── Fear & Greed ──────────────────────────────────────────────────────────────
 router.get('/fear-greed', async (req, res) => {

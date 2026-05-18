@@ -878,7 +878,7 @@ const SNAPSHOT_INDICES = [
   { name: 'Dow Jones',    symbol: '^DJI',  price: 42410.10, changePct:  0.62 },
   { name: 'NASDAQ',       symbol: '^IXIC', price: 17928.92, changePct:  1.07 },
   { name: 'Russell 2000', symbol: '^RUT',  price: 2010.45,  changePct:  0.84 },
-  { name: 'Nasdaq 100',   symbol: 'QQQ',   price: 475.38,   changePct:  1.23 },
+  { name: 'QQQ',          symbol: 'QQQ',   price: 475.38,   changePct:  1.23 },
 ];
 const SNAPSHOT_MARKET_VIEW = [
   { symbol: 'NVDA', name: 'NVIDIA Corp',      price: 112.50, changePct:  2.14 },

@@ -12336,7 +12336,7 @@ export default function Dashboard() {
                 {!isAdmin && !isProfessor && !user?.promo_redeemed && (
                   <div style={{ ...CARD, marginBottom: 16 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Promo Code</div>
-                    <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Have a promo code? Enter it below for permanent premium access.</div>
+                    <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Have a promo code? Enter it below for a discounted premium subscription.</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input
@@ -12378,7 +12378,7 @@ export default function Dashboard() {
                       <span style={{ fontSize: 14, color: GREEN }}>✓</span>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 14, color: GREEN }}>Promo Code Redeemed</div>
-                        <div style={{ fontSize: 12, color: TEXT2, marginTop: 2 }}>Your premium access is permanent and won't be affected by code changes.</div>
+                        <div style={{ fontSize: 12, color: TEXT2, marginTop: 2 }}>Your discounted rate is locked in and won't be affected by future code changes.</div>
                       </div>
                     </div>
                   </div>
@@ -12656,7 +12656,7 @@ export default function Dashboard() {
                       <div style={{ fontWeight: 700, fontSize: 15 }}>Promo Code</div>
                       <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: 'rgba(167,139,250,0.12)', color: '#a78bfa' }}>Admin Only</span>
                     </div>
-                    <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Users who enter this code get permanent premium access. Changing the code doesn't affect users who already redeemed it.</div>
+                    <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Users who enter this code get a discounted premium subscription. Changing the code doesn't affect users who already redeemed it.</div>
                     {promoCode === null ? (
                       <button onClick={async () => {
                         try { const r = await api.get('/auth/admin/promo-code'); setPromoCode(r.data.code || ''); setPromoCodeInput(r.data.code || ''); }

@@ -3299,6 +3299,7 @@ export default function Dashboard() {
   const [hoveredNav, setHoveredNav] = useState(null);
   const [navHoverY, setNavHoverY] = useState(0);
   const [navHoverLabel, setNavHoverLabel] = useState('');
+  const [stableTourSteps, setStableTourSteps] = useState([]);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
   const [cmdIdx, setCmdIdx] = useState(0);
@@ -3937,11 +3938,31 @@ export default function Dashboard() {
     const cfOrd  = getOrd('cashflow-tabs',  ['banking', 'budgeting', 'taxes', 'scholarship']);
     const inOrd  = getOrd('insights-tabs',  ['markets', 'news', 'signals', 'options']);
     const navOrd = getOrd('nav-order',      ['overview', 'cashflow', 'investments', 'insights', 'learn']);
-    return buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd);
+    const sorted = buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd);
+    // Within each same-panel+tab group, sort by actual DOM vertical position where elements are visible
+    const out = [];
+    let si = 0;
+    while (si < sorted.length) {
+      const s0 = sorted[si];
+      const gKey = `${s0.panel}|${s0.tab ?? ''}|${s0.insightsTab ?? ''}`;
+      const group = [];
+      while (si < sorted.length && `${sorted[si].panel}|${sorted[si].tab ?? ''}|${sorted[si].insightsTab ?? ''}` === gKey) {
+        group.push(sorted[si++]);
+      }
+      if (group.length > 1) {
+        const withTop = group.map(s => ({ s, top: document.querySelector(s.sel)?.getBoundingClientRect().top ?? Infinity }));
+        if (withTop.some(w => w.top !== Infinity)) withTop.sort((a, b) => a.top - b.top);
+        out.push(...withTop.map(w => w.s));
+      } else {
+        out.push(...group);
+      }
+    }
+    return out;
   };
 
   const openTourAt = (stepIndex) => {
     const steps = getTourSteps();
+    setStableTourSteps(steps);
     const s = steps[Math.min(stepIndex, steps.length - 1)];
     if (s.panel) { setPanel(s.panel); switchEduMode(false); }
     if (s.tab) setCashFlowTab(s.tab);
@@ -5860,8 +5881,8 @@ export default function Dashboard() {
       })()}
 
       {/* ── MAIN CONTENT ────────────────────────────────── */}
-      {showTour && (() => {
-        const _tourSteps = getTourSteps();
+      {showTour && stableTourSteps.length > 0 && (() => {
+        const _tourSteps = stableTourSteps;
         const _applyStep = (s) => {
           if (s.panel) { setPanel(s.panel); switchEduMode(false); }
           if (s.tab) setCashFlowTab(s.tab);
@@ -5874,7 +5895,7 @@ export default function Dashboard() {
             steps={_tourSteps}
             step={Math.min(tourStep, _tourSteps.length - 1)}
             containerRef={mainRef}
-            onClose={() => { setShowTour(false); if (mainRef.current) mainRef.current.style.overflowY = 'auto'; }}
+            onClose={() => { setShowTour(false); setStableTourSteps([]); if (mainRef.current) mainRef.current.style.overflowY = 'auto'; }}
             onNext={() => {
               const next = Math.min(tourStep + 1, _tourSteps.length - 1);
               setTourStep(next);

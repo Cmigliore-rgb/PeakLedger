@@ -103,6 +103,157 @@ function ConnectedAccountsCard({ onFixConnection }) {
   );
 }
 
+const MANUAL_TYPE_OPTIONS = [
+  { label: 'Checking',     type: 'depository', subtype: 'checking' },
+  { label: 'Savings',      type: 'depository', subtype: 'savings' },
+  { label: 'Credit Card',  type: 'credit',     subtype: 'credit card' },
+  { label: 'Investment',   type: 'investment', subtype: 'brokerage' },
+  { label: 'Cash',         type: 'depository', subtype: 'cash management' },
+  { label: 'Loan',         type: 'loan',       subtype: 'auto' },
+  { label: 'Other',        type: 'other',      subtype: 'other' },
+];
+
+function ManualAccountsCard({ onAccountsChanged }) {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId]     = useState(null);
+  const [form, setForm]         = useState({ institution_name: '', name: '', typeKey: 'Checking', balance: '' });
+  const [saving, setSaving]     = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    api.get('/plaid/manual-accounts')
+      .then(r => setAccounts(r.data))
+      .catch(() => setAccounts([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const resetForm = () => { setForm({ institution_name: '', name: '', typeKey: 'Checking', balance: '' }); setEditId(null); setShowForm(false); };
+
+  const startEdit = (a) => {
+    const opt = MANUAL_TYPE_OPTIONS.find(o => o.type === a.type && o.subtype === a.subtype) || MANUAL_TYPE_OPTIONS[0];
+    setForm({ institution_name: a.institution_name, name: a.name, typeKey: opt.label, balance: String(a.balance) });
+    setEditId(a.id);
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    const opt = MANUAL_TYPE_OPTIONS.find(o => o.label === form.typeKey) || MANUAL_TYPE_OPTIONS[0];
+    const body = { institution_name: form.institution_name || 'Manual', name: form.name, type: opt.type, subtype: opt.subtype, balance: parseFloat(form.balance) || 0 };
+    setSaving(true);
+    try {
+      if (editId) await api.patch(`/plaid/manual-accounts/${editId}`, body);
+      else         await api.post('/plaid/manual-accounts', body);
+      resetForm();
+      load();
+      if (onAccountsChanged) onAccountsChanged();
+    } catch { /* silent */ } finally { setSaving(false); }
+  };
+
+  const del = async (id, name) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    await api.delete(`/plaid/manual-accounts/${id}`);
+    load();
+    if (onAccountsChanged) onAccountsChanged();
+  };
+
+  return (
+    <div style={{ ...CARD, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>Manual Accounts</div>
+        {!showForm && (
+          <button onClick={() => { setEditId(null); setForm({ institution_name: '', name: '', typeKey: 'Checking', balance: '' }); setShowForm(true); }}
+            style={{ padding: '5px 12px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 6, color: GREEN, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            + Add
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Track accounts that Plaid doesn't support (cash, loans, etc.).</div>
+
+      {showForm && (
+        <div style={{ background: DARK, border: BORDER, borderRadius: 10, padding: '14px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>{editId ? 'Edit Account' : 'New Account'}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Institution</label>
+              <input value={form.institution_name} onChange={e => setForm(f => ({ ...f, institution_name: e.target.value }))}
+                placeholder="e.g. Chase"
+                style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Account Name</label>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Emergency Fund"
+                style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Type</label>
+              <select value={form.typeKey} onChange={e => setForm(f => ({ ...f, typeKey: e.target.value }))}
+                style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none', cursor: 'pointer' }}>
+                {MANUAL_TYPE_OPTIONS.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Balance ($)</label>
+              <input type="number" value={form.balance} onChange={e => setForm(f => ({ ...f, balance: e.target.value }))}
+                placeholder="0.00"
+                style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={resetForm} style={{ padding: '7px 16px', background: 'transparent', border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={save} disabled={saving || !form.name.trim()}
+              style={{ padding: '7px 16px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: GREEN, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[80, 60].map(w => <div key={w} className="skel" style={{ height: 14, width: `${w}%` }} />)}
+        </div>
+      ) : accounts.length === 0 && !showForm ? (
+        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+          <div style={{ fontSize: 13, color: TEXT3 }}>No manual accounts yet. Click "+ Add" to get started.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {accounts.map(a => {
+            const opt = MANUAL_TYPE_OPTIONS.find(o => o.type === a.type && o.subtype === a.subtype);
+            const typeLabel = opt ? opt.label : a.subtype;
+            return (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: DARK, borderRadius: 8, border: BORDER }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{a.institution_name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: BLUE, background: `${BLUE}18`, padding: '2px 7px', borderRadius: 4 }}>Manual</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>{a.name} &middot; {typeLabel} &middot; {fmt(a.balance)}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => startEdit(a)}
+                    style={{ padding: '5px 12px', background: 'transparent', border: BORDER, borderRadius: 6, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Edit
+                  </button>
+                  <button onClick={() => del(a.id, a.name)}
+                    style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, color: RED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const NAV = [
   { key: 'overview',       label: 'Overview',     icon: '⊞', premium: false, section: 'finance'   },
   { key: 'cashflow',       label: 'Cash Flow',    icon: '⬡', premium: false, section: 'finance'   },
@@ -3875,16 +4026,15 @@ export default function Dashboard() {
   useEffect(() => {
     if (!notifPrefs.budgetAlert && !notifPrefs.goalAlert && !notifPrefs.lowBalanceAlert) return;
     const now = Date.now();
-    const mo = new Date().toISOString().slice(0, 7); // "2026-05" — scope keys to month
+    const COOLDOWN = 7 * 24 * 60 * 60 * 1000; // once per week per condition
     const lastSent = JSON.parse(localStorage.getItem(`pl_notif_sent_${user?.id}`) || '{}');
-    const COOLDOWN = 7 * 24 * 60 * 60 * 1000; // 7-day secondary guard within a month
-    const trigger = async (type, subject, details, baseKey) => {
-      const key = `${baseKey}_${mo}`;
+    const trigger = async (type, subject, details, key) => {
       if (lastSent[key] && now - lastSent[key] < COOLDOWN) return;
+      // Pre-mark before the API call so concurrent effect reruns don't double-send
+      lastSent[key] = now;
+      localStorage.setItem(`pl_notif_sent_${user?.id}`, JSON.stringify(lastSent));
       try {
         await api.post('/notifications/send', { type, subject, details });
-        lastSent[key] = now;
-        localStorage.setItem(`pl_notif_sent_${user?.id}`, JSON.stringify(lastSent));
         api.get('/notifications/inbox').then(r => setInboxNotifs(r.data.notifications || [])).catch(() => {});
       } catch {}
     };
@@ -6229,7 +6379,7 @@ export default function Dashboard() {
                     Demo data. Connect an account to see your real numbers.
                   </div>
                 )}
-                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 10 : 16, marginBottom: 24, marginTop: isDemoData ? 8 : 24 }}>
+                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 10 : 16, marginBottom: 24, marginTop: isDemoData ? 8 : 24, alignItems: 'start' }}>
                   {(() => {
                     const NW_CARDS = [
                       { key: 'nw',   label: 'Net Worth',         value: fmt(animNetWorth),    sub: 'Assets − Liabilities' },
@@ -6252,7 +6402,7 @@ export default function Dashboard() {
                         {!isMobile && card.key === 'nw' && (() => {
                           const snaps = (isDemoData ? DEMO_SNAPSHOTS : snapshots).slice(-12);
                           if (snaps.length < 2) return null;
-                          const vals = snaps.map(s => s.net_worth);
+                          const vals = snaps.map(s => s.value ?? s.net_worth ?? 0);
                           const minV = Math.min(...vals), maxV = Math.max(...vals), rng = maxV - minV || 1;
                           const SW = 84, SH = 28;
                           const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * SW).toFixed(1)},${(SH - ((v - minV) / rng) * SH).toFixed(1)}`).join(' ');
@@ -8303,7 +8453,11 @@ export default function Dashboard() {
                                       const catThresholds = Array.isArray(notifPrefs.categoryThresholds?.[b.category])
                                         ? notifPrefs.categoryThresholds[b.category]
                                         : [];
-                                      const updateThresholds = (newArr) => setNotifPrefs(p => ({ ...p, categoryThresholds: { ...p.categoryThresholds, [b.category]: newArr } }));
+                                      const updateThresholds = async (newArr) => {
+                                        const newPrefs = { ...notifPrefs, categoryThresholds: { ...notifPrefs.categoryThresholds, [b.category]: newArr } };
+                                        setNotifPrefs(newPrefs);
+                                        try { await api.put('/notifications/prefs', newPrefs); } catch {}
+                                      };
                                       const isOpen = !!budgetAlertsOpen[b.category];
                                       const toggle = () => setBudgetAlertsOpen(p => ({ ...p, [b.category]: !p[b.category] }));
                                       return (
@@ -8325,8 +8479,6 @@ export default function Dashboard() {
                                               <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 8 }}>
                                                 <button onClick={e => { e.stopPropagation(); updateThresholds([...catThresholds, 80]); }}
                                                   style={{ fontSize: 11, padding: '3px 9px', background: MUTED, border: BORDER, borderRadius: 6, color: BLUE, cursor: 'pointer', fontWeight: 600 }}>+ Add</button>
-                                                <button onClick={async e => { e.stopPropagation(); try { await api.put('/notifications/prefs', notifPrefs); } catch {} }}
-                                                  style={{ fontSize: 11, padding: '3px 9px', background: BLUE_BTN, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Save</button>
                                               </div>
                                               {catThresholds.length === 0 && (
                                                 <div style={{ fontSize: 11, color: TEXT3, marginTop: 6 }}>Default: alert at 80%. Click + Add to customize.</div>
@@ -11989,6 +12141,8 @@ export default function Dashboard() {
                 </div>
 
                 <ConnectedAccountsCard onFixConnection={openUpdateMode} />
+
+                {isPremium && <ManualAccountsCard onAccountsChanged={fetchAll} />}
 
                 {isPremium && !isAdmin && !isProfessor && (
                   <div style={{ ...CARD, marginBottom: 16 }}>

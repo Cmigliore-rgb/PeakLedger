@@ -133,7 +133,22 @@ router.post('/exchange_token', requireAuth, async (req, res) => {
 router.get('/accounts', requireAuth, async (req, res) => {
   try {
     const { getAccounts } = require('../data_controller');
-    res.json(await getAccounts(req));
+    const result = await getAccounts(req);
+    // Append manual accounts so they flow through all existing account-aware code
+    const manuals = db.prepare('SELECT * FROM manual_accounts WHERE user_id = ? ORDER BY created_at ASC').all(req.user.id);
+    const manualFormatted = manuals.map(m => ({
+      account_id: `manual_${m.id}`,
+      name: m.name,
+      institution_name: m.institution_name,
+      type: m.type,
+      subtype: m.subtype,
+      balances: { current: m.balance, available: m.type === 'credit' ? null : m.balance },
+      mask: null,
+      _manual: true,
+      _manual_id: m.id,
+    }));
+    result.accounts = [...(result.accounts || []), ...manualFormatted];
+    res.json(result);
   } catch (err) {
     console.error('accounts error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to load accounts' });
@@ -262,6 +277,48 @@ router.patch('/manual-liabilities/:id', requireAuth, (req, res) => {
 router.delete('/manual-liabilities/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM manual_liabilities WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
   res.json({ success: true });
+});
+
+// ── Manual accounts (premium: track accounts Plaid doesn't support) ──────────
+
+const VALID_MANUAL_TYPES = ['depository','credit','investment','loan','other'];
+
+router.get('/manual-accounts', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM manual_accounts WHERE user_id = ? ORDER BY created_at ASC').all(req.user.id);
+  res.json({ rows });
+});
+
+router.post('/manual-accounts', requireAuth, (req, res) => {
+  const { institution_name, name, type, subtype, balance } = req.body;
+  if (!name || balance == null) return res.status(400).json({ error: 'name and balance are required' });
+  const t = VALID_MANUAL_TYPES.includes(type) ? type : 'depository';
+  const r = db.prepare(
+    'INSERT INTO manual_accounts (user_id, institution_name, name, type, subtype, balance) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.user.id, institution_name || 'Manual', name, t, subtype || 'checking', Number(balance));
+  res.json({ id: r.lastInsertRowid });
+});
+
+router.patch('/manual-accounts/:id', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT * FROM manual_accounts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const { institution_name, name, type, subtype, balance } = req.body;
+  const t = type && VALID_MANUAL_TYPES.includes(type) ? type : row.type;
+  db.prepare(
+    `UPDATE manual_accounts SET institution_name=?, name=?, type=?, subtype=?, balance=?, updated_at=datetime('now') WHERE id=? AND user_id=?`
+  ).run(
+    institution_name ?? row.institution_name,
+    name ?? row.name,
+    t,
+    subtype ?? row.subtype,
+    balance != null ? Number(balance) : row.balance,
+    row.id, req.user.id
+  );
+  res.json({ ok: true });
+});
+
+router.delete('/manual-accounts/:id', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM manual_accounts WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  res.json({ ok: true });
 });
 
 // ── Manual sync: force-refresh cache for all connected accounts ───────────

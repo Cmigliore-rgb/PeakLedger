@@ -103,6 +103,42 @@ function ConnectedAccountsCard({ onFixConnection }) {
   );
 }
 
+const NAV = [
+  { key: 'overview',       label: 'Overview',     icon: '⊞', premium: false, section: 'finance'   },
+  { key: 'cashflow',       label: 'Cash Flow',    icon: '⬡', premium: false, section: 'finance'   },
+  { key: 'investments',    label: 'Investments',  icon: '◈', premium: false, section: 'finance'   },
+  { key: 'insights',       label: 'Market Insights', icon: '◬', section: 'finance'   },
+  { key: 'learn',          label: 'Learn',        icon: '✦', premium: false, section: 'finance'   },
+  { key: 'edu-courses',    label: 'My Courses',   icon: '◫', premium: false, section: 'education' },
+];
+
+const PANEL_SUBTABS = {
+  cashflow: [
+    { key: 'banking',      label: 'Banking' },
+    { key: 'budgeting',    label: 'Budgeting' },
+    { key: 'taxes',        label: 'Taxes' },
+    { key: 'scholarship',  label: 'Scholarship' },
+  ],
+  insights: [
+    { key: 'markets', label: 'Markets' },
+    { key: 'news',    label: 'News' },
+    { key: 'signals', label: 'Signal Engine' },
+    { key: 'options', label: 'Options' },
+  ],
+  learn: [
+    { key: 'essentials', label: 'The Essentials' },
+    { key: 'analyst',    label: 'The Analyst' },
+  ],
+};
+
+const fmt = (n) =>
+  typeof n === 'number'
+    ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+
 const MANUAL_TYPE_OPTIONS = [
   { label: 'Checking',     type: 'depository', subtype: 'checking' },
   { label: 'Savings',      type: 'depository', subtype: 'savings' },
@@ -146,18 +182,20 @@ function ManualAccountsCard({ onAccountsChanged }) {
     setSaving(true);
     try {
       if (editId) await api.patch(`/plaid/manual-accounts/${editId}`, body);
-      else         await api.post('/plaid/manual-accounts', body);
+      else        await api.post('/plaid/manual-accounts', body);
       resetForm();
       load();
       if (onAccountsChanged) onAccountsChanged();
-    } catch { /* silent */ } finally { setSaving(false); }
+    } catch (e) { console.error('ManualAccountsCard save error:', e); } finally { setSaving(false); }
   };
 
   const del = async (id, name) => {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    await api.delete(`/plaid/manual-accounts/${id}`);
-    load();
-    if (onAccountsChanged) onAccountsChanged();
+    try {
+      await api.delete(`/plaid/manual-accounts/${id}`);
+      load();
+      if (onAccountsChanged) onAccountsChanged();
+    } catch (e) { console.error('ManualAccountsCard del error:', e); }
   };
 
   return (
@@ -172,23 +210,21 @@ function ManualAccountsCard({ onAccountsChanged }) {
         )}
       </div>
       <div style={{ fontSize: 13, color: TEXT2, marginBottom: 16 }}>Track accounts that Plaid doesn't support (cash, loans, etc.).</div>
-
       {showForm && (
         <div style={{ background: DARK, border: BORDER, borderRadius: 10, padding: '14px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>{editId ? 'Edit Account' : 'New Account'}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Institution</label>
-              <input value={form.institution_name} onChange={e => setForm(f => ({ ...f, institution_name: e.target.value }))}
-                placeholder="e.g. Chase"
-                style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none' }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Account Name</label>
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Emergency Fund"
-                style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none' }} />
-            </div>
+            {[
+              { key: 'institution_name', label: 'Institution', placeholder: 'e.g. Chase', type: 'text' },
+              { key: 'name',             label: 'Account Name', placeholder: 'e.g. Emergency Fund', type: 'text' },
+            ].map(({ key, label, placeholder, type }) => (
+              <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</label>
+                <input type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={{ background: CARD_BG, border: BORDER, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: TEXT, outline: 'none' }} />
+              </div>
+            ))}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <label style={{ fontSize: 11, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Type</label>
               <select value={form.typeKey} onChange={e => setForm(f => ({ ...f, typeKey: e.target.value }))}
@@ -212,7 +248,6 @@ function ManualAccountsCard({ onAccountsChanged }) {
           </div>
         </div>
       )}
-
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[80, 60].map(w => <div key={w} className="skel" style={{ height: 14, width: `${w}%` }} />)}
@@ -237,13 +272,9 @@ function ManualAccountsCard({ onAccountsChanged }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => startEdit(a)}
-                    style={{ padding: '5px 12px', background: 'transparent', border: BORDER, borderRadius: 6, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Edit
-                  </button>
+                    style={{ padding: '5px 12px', background: 'transparent', border: BORDER, borderRadius: 6, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Edit</button>
                   <button onClick={() => del(a.id, a.name)}
-                    style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, color: RED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Delete
-                  </button>
+                    style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, color: RED, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Delete</button>
                 </div>
               </div>
             );
@@ -253,42 +284,6 @@ function ManualAccountsCard({ onAccountsChanged }) {
     </div>
   );
 }
-
-const NAV = [
-  { key: 'overview',       label: 'Overview',     icon: '⊞', premium: false, section: 'finance'   },
-  { key: 'cashflow',       label: 'Cash Flow',    icon: '⬡', premium: false, section: 'finance'   },
-  { key: 'investments',    label: 'Investments',  icon: '◈', premium: false, section: 'finance'   },
-  { key: 'insights',       label: 'Market Insights', icon: '◬', section: 'finance'   },
-  { key: 'learn',          label: 'Learn',        icon: '✦', premium: false, section: 'finance'   },
-  { key: 'edu-courses',    label: 'My Courses',   icon: '◫', premium: false, section: 'education' },
-];
-
-const PANEL_SUBTABS = {
-  cashflow: [
-    { key: 'banking',      label: 'Banking' },
-    { key: 'budgeting',    label: 'Budgeting' },
-    { key: 'taxes',        label: 'Taxes' },
-    { key: 'scholarship',  label: 'Scholarship' },
-  ],
-  insights: [
-    { key: 'markets', label: 'Markets' },
-    { key: 'news',    label: 'News' },
-    { key: 'signals', label: 'Signal Engine' },
-    { key: 'options', label: 'Options' },
-  ],
-  learn: [
-    { key: 'essentials', label: 'The Essentials' },
-    { key: 'analyst',    label: 'The Analyst' },
-  ],
-};
-
-const fmt = (n) =>
-  typeof n === 'number'
-    ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '—';
-
-const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 
 function Frac({ n, d, sz = 13 }) {
   return (
@@ -437,8 +432,10 @@ const NAME_DOMAIN = {
 };
 
 const LOGO_OVERRIDES = {
-  'capital one': 'https://www.capitalone.com/favicon.ico',
-  'capitalone':  'https://www.capitalone.com/favicon.ico',
+  'capital one':  'https://www.capitalone.com/favicon.ico',
+  'capitalone':   'https://www.capitalone.com/favicon.ico',
+  'peakledger':   '/logo.png',
+  'peak ledger':  '/logo.png',
 };
 
 function logoUrls(name, ticker, logoUrl) {

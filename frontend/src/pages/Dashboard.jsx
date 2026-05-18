@@ -684,7 +684,7 @@ function PerfChartInteractive({ pfData, spData, showBenchmark, perfLoading, isMo
 }
 
 // ── Generic donut pie chart (slices: [{label, value, color}]) ────────────────
-function PieDonut({ slices, size = 140 }) {
+function PieDonut({ slices, size = 140, onSliceClick }) {
   const R = size / 2, r = R * 0.55, cx = R, cy = R;
   let angle = -Math.PI / 2;
   const tot = slices.reduce((s, x) => s + x.value, 0) || 1;
@@ -697,7 +697,7 @@ function PieDonut({ slices, size = 140 }) {
         const x2 = cx + R * Math.cos(ea), y2 = cy + R * Math.sin(ea);
         const x3 = cx + r * Math.cos(ea), y3 = cy + r * Math.sin(ea);
         const x4 = cx + r * Math.cos(sa), y4 = cy + r * Math.sin(sa);
-        return <path key={i} d={`M ${x1} ${y1} A ${R} ${R} 0 ${la} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${la} 0 ${x4} ${y4} Z`} fill={s.color} stroke="transparent" strokeWidth={1.5} />;
+        return <path key={i} d={`M ${x1} ${y1} A ${R} ${R} 0 ${la} 1 ${x2} ${y2} L ${x3} ${y3} A ${r} ${r} 0 ${la} 0 ${x4} ${y4} Z`} fill={s.color} stroke="transparent" strokeWidth={1.5} onClick={() => onSliceClick?.(s)} style={{ cursor: onSliceClick ? 'pointer' : undefined, transition: 'opacity 0.15s' }} onMouseEnter={e => { if(onSliceClick) e.target.style.opacity='0.8'; }} onMouseLeave={e => { e.target.style.opacity='1'; }} />;
       })}
     </svg>
   );
@@ -6524,6 +6524,7 @@ export default function Dashboard() {
               const _ovOrder = getOrder('overview', _OV_DEF);
               const _ovReorder = handleReorder('overview', _OV_DEF);
               const _ovCustom = !!layoutOrder['overview'];
+              const _noAccounts = !isDemoData && activeAccounts.length === 0;
               return (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24 }}>
@@ -6592,14 +6593,33 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                <AIInsightCard
-                  isDemoData={showDemoAI}
-                  demoKey="overview"
-                  onGetAdvice={canSeeAI ? () => getAdvice('overview') : undefined}
-                  loading={adviceState.overview?.loading}
-                  text={adviceState.overview?.text}
-                />
+                {!_noAccounts && (
+                  <AIInsightCard
+                    isDemoData={showDemoAI}
+                    demoKey="overview"
+                    onGetAdvice={canSeeAI ? () => getAdvice('overview') : undefined}
+                    loading={adviceState.overview?.loading}
+                    text={adviceState.overview?.text}
+                  />
+                )}
 
+                {_noAccounts ? (
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px 48px', textAlign:'center' }}>
+                    <svg viewBox="0 0 148 72" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width:148, height:72, marginBottom:28 }}>
+                      <polyline points="4,66 26,52 48,44 68,33 88,21 110,12 130,6 144,3" stroke="#378ADD" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.2"/>
+                      <polyline points="4,66 26,52 48,44 68,33 88,21 110,12 130,6 144,3" stroke="#378ADD" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="144" cy="3" r="5.5" fill="#378ADD"/>
+                    </svg>
+                    <div style={{ fontSize:22, fontWeight:700, color:TEXT, marginBottom:10, letterSpacing:'-0.3px' }}>Your financial picture starts here</div>
+                    <div style={{ fontSize:14, color:TEXT2, lineHeight:1.65, maxWidth:380, margin:'0 auto 28px' }}>Connect an account to see your net worth, spending, and portfolio in one place.</div>
+                    {isAdmin && !viewAs && (
+                      <button onClick={() => isPremium ? setShowConnectModal(true) : setShowUpgrade(true)}
+                        style={{ padding:'11px 28px', background:BLUE_BTN, color:'#fff', border:'none', borderRadius:9, fontSize:14, fontWeight:700, cursor:'pointer', letterSpacing:'0.2px' }}>
+                        Connect Account
+                      </button>
+                    )}
+                  </div>
+                ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
 
                 {/* ── Adaptive Insights ── */}
@@ -7320,6 +7340,7 @@ export default function Dashboard() {
                 })()}
                 </DragSection>
                 </div>{/* end flex layout */}
+                )}
               </div>
               );
             })()}
@@ -8468,6 +8489,28 @@ export default function Dashboard() {
                       </>
                     );
                   }
+
+                  if (!isDemoData && activeAccounts.length === 0) return (
+                    <div data-tour="budget-expenses" style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'64px 24px 48px', textAlign:'center' }}>
+                      <svg viewBox="0 0 100 64" fill="none" style={{ width:96, height:60, marginBottom:20 }}>
+                        <rect x="8" y="24" width="16" height="32" rx="3" fill="#4DA3FF" opacity="0.15"/>
+                        <rect x="30" y="16" width="16" height="40" rx="3" fill="#4DA3FF" opacity="0.15"/>
+                        <rect x="52" y="30" width="16" height="26" rx="3" fill="#4DA3FF" opacity="0.15"/>
+                        <rect x="74" y="10" width="16" height="46" rx="3" fill="#4DA3FF" opacity="0.15"/>
+                        <rect x="8" y="24" width="16" height="32" rx="3" fill="#4DA3FF" opacity="0.6"/>
+                        <rect x="74" y="10" width="16" height="46" rx="3" fill="#4DA3FF"/>
+                        <line x1="4" y1="58" x2="96" y2="58" stroke="#4DA3FF" strokeWidth="1.5" opacity="0.25"/>
+                      </svg>
+                      <div style={{ fontSize:16, fontWeight:700, color:TEXT, marginBottom:8 }}>Nothing to track yet</div>
+                      <div style={{ fontSize:13, color:TEXT2, lineHeight:1.65, maxWidth:340, margin:'0 auto 22px' }}>Once you connect a bank account your spending will automatically organize itself here.</div>
+                      {isAdmin&&!viewAs&&(
+                        <button onClick={()=>isPremium?setShowConnectModal(true):setShowUpgrade(true)}
+                          style={{ padding:'9px 22px', background:BLUE_BTN, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                          {isPremium?'+ Connect Bank':'Get Premium'}
+                        </button>
+                      )}
+                    </div>
+                  );
 
                   return (
                     <div data-tour="budget-expenses">
@@ -10528,18 +10571,23 @@ export default function Dashboard() {
                           <div className="lc" style={{ ...CARD, display:'flex', flexDirection:'column', alignItems:'center', gap:12, padding:'20px 16px' }}>
                             <div style={{ fontWeight:600, fontSize:13, alignSelf:'flex-start' }}>Allocation</div>
                             {pieSlices.length>0 ? <>
-                              {PieDonut({ slices:pieSlices, size:160 })}
+                              {PieDonut({ slices:pieSlices, size:160, onSliceClick: s => { const key = INV_TABS.find(t=>t.label===s.label)?.key; if(key) { setInvTab(key); setSelectedSector(null); } } })}
                               <div style={{ display:'flex', flexDirection:'column', gap:7, width:'100%' }}>
-                                {pieSlices.map(s=>(
-                                  <div key={s.label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                      <div style={{ width:8, height:8, borderRadius:'50%', background:s.color, flexShrink:0 }}/>
-                                      <span style={{ fontSize:11, color:TEXT2 }}>{s.label}</span>
+                                {pieSlices.map(s=>{
+                                  const key = INV_TABS.find(t=>t.label===s.label)?.key;
+                                  const active = key === invTab;
+                                  return (
+                                    <div key={s.label} onClick={() => { if(key) { setInvTab(key); setSelectedSector(null); } }} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'2px 4px', borderRadius:5, background:active?'rgba(77,163,255,0.08)':'transparent', transition:'background 0.15s' }}>
+                                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                        <div style={{ width:8, height:8, borderRadius:'50%', background:s.color, flexShrink:0 }}/>
+                                        <span style={{ fontSize:11, color:active?TEXT:TEXT2, fontWeight:active?700:400 }}>{s.label}</span>
+                                      </div>
+                                      <span style={{ fontSize:11, fontWeight:700 }}>{((s.value/pieTotal)*100).toFixed(1)}%</span>
                                     </div>
-                                    <span style={{ fontSize:11, fontWeight:700 }}>{((s.value/pieTotal)*100).toFixed(1)}%</span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
+                              <div style={{ fontSize:10, color:TEXT3, marginTop:2 }}>Click a slice to filter</div>
                             </> : <div style={{ fontSize:13, color:TEXT2 }}>No data</div>}
                           </div>
 
@@ -10589,21 +10637,33 @@ export default function Dashboard() {
                         </div>
                       ) : (
                         <div className="lc" style={{ ...CARD, marginBottom:16 }}>
-                          <div style={{ textAlign:'center', padding:'32px 24px' }}>
-                            <div style={{ fontSize:28, marginBottom:12 }}>📈</div>
-                            <div style={{ fontSize:15, fontWeight:700, color:TEXT, marginBottom:8 }}>
-                              {!isDemoData&&activeAccounts.some(a=>a.type==='investment')?'Investment data syncing':'No brokerage account connected'}
-                            </div>
-                            <div style={{ fontSize:13, color:TEXT2, lineHeight:1.6, maxWidth:360, margin:'0 auto 20px' }}>
-                              {!isDemoData&&activeAccounts.some(a=>a.type==='investment')
-                                ?'Your brokerage is connected but holdings are still loading. Plaid can take a few minutes to sync investment data for the first time.'
-                                :'Connect an investment account to track your portfolio, holdings, and performance in real time.'}
-                            </div>
-                            {isAdmin&&!viewAs&&(
-                              <button onClick={()=>isPremium?setShowConnectModal(true):setShowUpgrade(true)}
-                                style={{ padding:'10px 24px', background:BLUE_BTN, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-                                {isPremium?'+ Connect Brokerage':'Get Premium'}
-                              </button>
+                          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'52px 24px 44px', textAlign:'center' }}>
+                            {!isDemoData&&activeAccounts.some(a=>a.type==='investment') ? (
+                              <>
+                                <svg viewBox="0 0 80 60" fill="none" style={{ width:72, height:54, marginBottom:20 }}>
+                                  <circle cx="40" cy="30" r="26" stroke="#4DA3FF" strokeWidth="5" strokeDasharray="8 5" opacity="0.4"/>
+                                  <circle cx="40" cy="30" r="26" stroke="#4DA3FF" strokeWidth="5" strokeDasharray="50 113" strokeLinecap="round"/>
+                                  <circle cx="40" cy="30" r="5" fill="#4DA3FF"/>
+                                </svg>
+                                <div style={{ fontSize:16, fontWeight:700, color:TEXT, marginBottom:8 }}>Investment data syncing</div>
+                                <div style={{ fontSize:13, color:TEXT2, lineHeight:1.65, maxWidth:340, margin:'0 auto' }}>Your brokerage is connected but holdings are still loading. Plaid can take a few minutes to sync investment data for the first time.</div>
+                              </>
+                            ) : (
+                              <>
+                                <svg viewBox="0 0 100 64" fill="none" style={{ width:100, height:64, marginBottom:20 }}>
+                                  <polyline points="4,58 22,44 40,36 56,26 72,15 88,7 96,4" stroke="#4DA3FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.25"/>
+                                  <polyline points="4,58 22,44 40,36 56,26 72,15 88,7 96,4" stroke="#4DA3FF" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <circle cx="96" cy="4" r="5" fill="#4DA3FF"/>
+                                </svg>
+                                <div style={{ fontSize:16, fontWeight:700, color:TEXT, marginBottom:8 }}>No holdings yet</div>
+                                <div style={{ fontSize:13, color:TEXT2, lineHeight:1.65, maxWidth:340, margin:'0 auto 24px' }}>Connect a brokerage account to track your portfolio, P&amp;L, and asset allocation.</div>
+                                {isAdmin&&!viewAs&&(
+                                  <button onClick={()=>isPremium?setShowConnectModal(true):setShowUpgrade(true)}
+                                    style={{ padding:'10px 24px', background:BLUE_BTN, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                                    {isPremium?'+ Connect Brokerage':'Get Premium'}
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -10957,11 +11017,42 @@ export default function Dashboard() {
                 )}
                 {(() => {
                   const displayArticles = articles;
+                  const _noHoldings = !isDemoData && activeHoldings.length === 0;
                   return displayArticles.length === 0 ? (
-                  <div style={{ ...CARD, textAlign: 'center', padding: '48px 24px' }}>
-                    <div style={{ fontSize: 32, marginBottom: 12 }}>◬</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: TEXT2, marginBottom: 6 }}>No articles found</div>
-                    <div style={{ fontSize: 13, color: TEXT3 }}>{tickerFilter ? `No news for "${tickerFilter}" — try a different ticker.` : 'Check back soon for the latest market news.'}</div>
+                  <div style={{ ...CARD, display:'flex', flexDirection:'column', alignItems:'center', padding:'56px 24px 44px', textAlign:'center' }}>
+                    {tickerFilter ? (
+                      <>
+                        <div style={{ fontSize:28, marginBottom:14, color:TEXT3 }}>◬</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:TEXT2, marginBottom:6 }}>No results for "{tickerFilter}"</div>
+                        <div style={{ fontSize:13, color:TEXT3 }}>Try a different ticker symbol.</div>
+                      </>
+                    ) : _noHoldings ? (
+                      <>
+                        <svg viewBox="0 0 80 60" fill="none" style={{ width:76, height:56, marginBottom:20 }}>
+                          <rect x="8" y="20" width="10" height="32" rx="2" fill="#4DA3FF" opacity="0.18"/>
+                          <rect x="24" y="30" width="10" height="22" rx="2" fill="#4DA3FF" opacity="0.18"/>
+                          <rect x="40" y="12" width="10" height="40" rx="2" fill="#4DA3FF" opacity="0.18"/>
+                          <rect x="56" y="24" width="10" height="28" rx="2" fill="#4DA3FF" opacity="0.18"/>
+                          <rect x="8" y="20" width="10" height="32" rx="2" fill="#4DA3FF" opacity="0.7"/>
+                          <rect x="40" y="12" width="10" height="40" rx="2" fill="#4DA3FF"/>
+                          <line x1="4" y1="54" x2="76" y2="54" stroke="#4DA3FF" strokeWidth="1.5" opacity="0.3"/>
+                        </svg>
+                        <div style={{ fontSize:16, fontWeight:700, color:TEXT, marginBottom:8 }}>Your feed is waiting</div>
+                        <div style={{ fontSize:13, color:TEXT2, lineHeight:1.65, maxWidth:320, margin:'0 auto 22px' }}>Connect a brokerage account and we will personalize your news to your holdings.</div>
+                        {isAdmin&&!viewAs&&(
+                          <button onClick={()=>isPremium?setShowConnectModal(true):setShowUpgrade(true)}
+                            style={{ padding:'9px 22px', background:BLUE_BTN, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                            {isPremium?'+ Connect Brokerage':'Get Premium'}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize:28, marginBottom:14, color:TEXT3 }}>◬</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:TEXT2, marginBottom:6 }}>No articles found</div>
+                        <div style={{ fontSize:13, color:TEXT3 }}>Check back soon for the latest market news.</div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div data-tour="news-articles" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 16 }}>

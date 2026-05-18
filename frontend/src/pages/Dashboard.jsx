@@ -2332,13 +2332,20 @@ const OV_SECTION_TOUR = {
 };
 const BASELINE_TOUR_SEL = '[data-tour="overview-baseline"]';
 
-function buildSortedSteps(base, ovOrder, cfOrder, inOrder) {
+function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder) {
+  const FIXED_FIRST_SELS = new Set(['[data-tour="brand"]', '[data-tour="sidebar-nav"]']);
+  const FIXED_LAST_SELS  = new Set(['[data-tour="nav-settings"]']);
+
+  const fixedFirst = base.filter(s => FIXED_FIRST_SELS.has(s.sel));
+  const fixedLast  = base.filter(s => FIXED_LAST_SELS.has(s.sel));
+  const middle     = base.filter(s => !FIXED_FIRST_SELS.has(s.sel) && !FIXED_LAST_SELS.has(s.sel));
+
   const ovSels = new Set(Object.values(OV_SECTION_TOUR));
   const ovSelToSec = Object.fromEntries(Object.entries(OV_SECTION_TOUR).map(([k, v]) => [v, k]));
   const ovStepsBySec = {};
   let baselineStep = null;
   const cfStepsByTab = {}, inStepsByTab = {};
-  base.forEach(s => {
+  middle.forEach(s => {
     if (ovSels.has(s.sel)) ovStepsBySec[ovSelToSec[s.sel]] = s;
     if (s.sel === BASELINE_TOUR_SEL) baselineStep = s;
     if (s.panel === 'cashflow' && s.tab) (cfStepsByTab[s.tab] = cfStepsByTab[s.tab] || []).push(s);
@@ -2356,18 +2363,20 @@ function buildSortedSteps(base, ovOrder, cfOrder, inOrder) {
   const cfSorted = [...(cfOrder || cfSecs), ...cfSecs.filter(t => !(cfOrder || cfSecs).includes(t))];
   const inSecs = ['markets', 'news', 'signals', 'options'];
   const inSorted = [...(inOrder || inSecs), ...inSecs.filter(t => !(inOrder || inSecs).includes(t))];
-  const result = [];
-  let ovInserted = false, cfInserted = false, inInserted = false;
-  for (const s of base) {
-    const isOvSec = ovSels.has(s.sel) || s.sel === BASELINE_TOUR_SEL;
-    const isCfStep = s.panel === 'cashflow' && s.tab;
-    const isInStep = s.panel === 'insights' && s.insightsTab;
-    if (isOvSec) { if (!ovInserted) { result.push(...sortedOvSteps); ovInserted = true; } }
-    else if (isCfStep) { if (!cfInserted) { result.push(...cfSorted.flatMap(tab => cfStepsByTab[tab] || [])); cfInserted = true; } }
-    else if (isInStep) { if (!inInserted) { result.push(...inSorted.flatMap(tab => inStepsByTab[tab] || [])); inInserted = true; } }
-    else result.push(s);
-  }
-  return result;
+
+  const panelSteps = {
+    overview:    sortedOvSteps,
+    cashflow:    cfSorted.flatMap(tab => cfStepsByTab[tab] || []),
+    investments: middle.filter(s => s.panel === 'investments' && !ovSels.has(s.sel) && s.sel !== BASELINE_TOUR_SEL),
+    insights:    inSorted.flatMap(tab => inStepsByTab[tab] || []),
+    learn:       middle.filter(s => s.panel === 'learn'),
+  };
+
+  const defaultNavOrder = ['overview', 'cashflow', 'investments', 'insights', 'learn'];
+  const orderedNavPanels = navOrder || defaultNavOrder;
+  const orderedMiddle = orderedNavPanels.flatMap(panel => panelSteps[panel] || []);
+
+  return [...fixedFirst, ...orderedMiddle, ...fixedLast];
 }
 
 function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
@@ -3924,10 +3933,11 @@ export default function Dashboard() {
       const ss = new Set(s);
       return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))];
     };
-    const ovOrd = getOrd('overview', ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
-    const cfOrd = getOrd('cashflow-tabs', ['banking', 'budgeting', 'taxes', 'scholarship']);
-    const inOrd = getOrd('insights-tabs', ['markets', 'news', 'signals', 'options']);
-    return buildSortedSteps(base, ovOrd, cfOrd, inOrd);
+    const ovOrd  = getOrd('overview',       ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
+    const cfOrd  = getOrd('cashflow-tabs',  ['banking', 'budgeting', 'taxes', 'scholarship']);
+    const inOrd  = getOrd('insights-tabs',  ['markets', 'news', 'signals', 'options']);
+    const navOrd = getOrd('nav-order',      ['overview', 'cashflow', 'investments', 'insights', 'learn']);
+    return buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd);
   };
 
   const openTourAt = (stepIndex) => {
@@ -4436,8 +4446,13 @@ export default function Dashboard() {
           extraContext.performanceVsSP500 = { portfolioPct: +pfChg.toFixed(2), sp500Pct: +spChg.toFixed(2), alphaPct: +(pfChg - spChg).toFixed(2), period: perfPeriod };
         }
       }
+      const _advGoals    = (() => { try { return JSON.parse(localStorage.getItem(`pl_goals_${user?.id}`) || '[]'); } catch { return []; } })();
+      const _advPriority = localStorage.getItem(`pl_priority_${user?.id}`) || '';
+      const _ctxPrefix   = (_advGoals.length || _advPriority)
+        ? `Context: this user's top financial priority is "${_advPriority}"${_advGoals.length ? ` and their goals include ${_advGoals.join(', ')}` : ''}. Tailor the advice to their situation. `
+        : '';
       await streamChat(
-        { message: prompts[panelKey] || 'Give me financial recommendations based on my data.', history: [], context: { accounts: slimAccounts, transactions: slimTxns, holdings: slimHoldings, budget: budgetMap, ...extraContext } },
+        { message: _ctxPrefix + (prompts[panelKey] || 'Give me financial recommendations based on my data.'), history: [], context: { accounts: slimAccounts, transactions: slimTxns, holdings: slimHoldings, budget: budgetMap, ...extraContext } },
         delta => setAdviceState(s => ({ ...s, [panelKey]: { loading: false, text: (s[panelKey]?.text || '') + delta } })),
         () => setAdviceState(s => ({ ...s, [panelKey]: { ...s[panelKey], loading: false } })),
         () => setAdviceState(s => ({ ...s, [panelKey]: { loading: false, text: 'Could not get advice. Check GROQ_API_KEY in backend .env.' } })),
@@ -4962,7 +4977,7 @@ export default function Dashboard() {
               <button
                 title={sidebarCollapsed ? 'Take a Tour' : undefined}
                 onClick={() => {
-                  const steps = effectiveProfessor ? PROFESSOR_TOUR_STEPS : effectiveStudent ? STUDENT_TOUR_STEPS : FINANCE_TOUR_STEPS;
+                  const steps = getTourSteps();
                   let idx = steps.findIndex(s =>
                     s.panel === panel &&
                     (!s.tab || s.tab === cashFlowTab) &&
@@ -7895,18 +7910,21 @@ export default function Dashboard() {
 
                       {(() => {
                         // Savings rate trend and income consistency
-                        const expByMonth = [];
+                        const expByMonth = [], incByMonth = [];
                         for (let i = 5; i >= 0; i--) {
                           const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
                           const start = new Date(d.getFullYear(), d.getMonth(), 1);
                           const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-                          const txns = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0; });
-                          expByMonth.push(txns.reduce((s, t) => s + t.amount, 0));
+                          const allTxns = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end; });
+                          expByMonth.push(allTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0));
+                          incByMonth.push(allTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0));
                         }
                         const MOCK_EXP = [1180, 1540, 980, 1320, 1110, 1500];
+                        const MOCK_INC = [1420, 1850, 1200, 1550, 1350, 1800];
                         const effectiveExp = useReal ? expByMonth : MOCK_EXP;
+                        const effectiveInc = useReal ? incByMonth : MOCK_INC;
                         const rateByMonth = months.map((m, i) => {
-                          const inc = m.total; const exp = effectiveExp[i];
+                          const inc = effectiveInc[i]; const exp = effectiveExp[i];
                           return inc > 0 ? Math.round((inc - exp) / inc * 100) : null;
                         });
                         const validInc = months.map(m => m.total).filter(v => v > 50);

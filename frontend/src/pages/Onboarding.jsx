@@ -210,6 +210,22 @@ export default function Onboarding({ user, isPremium, onComplete, onOpenUpgrade,
     if (goals.length) localStorage.setItem(`pl_goals_${user.id}`, JSON.stringify(goals));
     if (income) localStorage.setItem(`pl_income_${user.id}`, income);
     if (priority) localStorage.setItem(`pl_priority_${user.id}`, priority);
+
+    const scores = { cashflow: 4, investments: 3, insights: 2, learn: 1 };
+    goals.forEach(g => {
+      if (g === 'budget')  scores.cashflow    = (scores.cashflow    || 0) + 3;
+      if (g === 'invest')  scores.investments = (scores.investments || 0) + 3;
+      if (g === 'debt')    scores.cashflow    = (scores.cashflow    || 0) + 2;
+      if (g === 'savings') scores.cashflow    = (scores.cashflow    || 0) + 2;
+      if (g === 'learn')   scores.learn       = (scores.learn       || 0) + 3;
+    });
+    if (priority === 'save')   scores.cashflow    = (scores.cashflow    || 0) + 3;
+    if (priority === 'debt')   scores.cashflow    = (scores.cashflow    || 0) + 3;
+    if (priority === 'invest') scores.investments = (scores.investments || 0) + 3;
+    if (priority === 'track')  { scores.cashflow = (scores.cashflow || 0) + 2; scores.insights = (scores.insights || 0) + 1; }
+    const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+    const existing = (() => { try { return JSON.parse(localStorage.getItem(`pl_layout_order_${user.id}`) || '{}'); } catch { return {}; } })();
+    localStorage.setItem(`pl_layout_order_${user.id}`, JSON.stringify({ ...existing, 'nav-order': ['overview', ...ranked] }));
   };
 
   const finish = () => { savePrefs(); onComplete(); };

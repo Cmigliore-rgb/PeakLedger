@@ -98,12 +98,17 @@ export default function Login() {
   const submit = async (e) => {
     e.preventDefault();
     setError(''); setLoading(true);
+    const formEl = e.target;
     try {
       const { data } = await api.post('/auth/login', form);
       if (data.requiresTwoFactor) {
         setTwoFactor({ tempToken: data.tempToken });
       } else {
-        storeCredential(form.email, form.password);
+        if (window.PasswordCredential) {
+          try { navigator.credentials.store(new PasswordCredential(formEl)).catch(() => {}); } catch { storeCredential(form.email, form.password); }
+        } else {
+          storeCredential(form.email, form.password);
+        }
         login(data.token, data.user);
         navigate('/app');
       }
@@ -250,7 +255,7 @@ export default function Login() {
           </div>
         )}
 
-        <form onSubmit={submit}>
+        <form onSubmit={submit} autoComplete="on">
           {error && (
             <div style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '10px 14px', color: '#f87171', fontSize: 13, marginBottom: 20 }}>
               {error}
@@ -259,14 +264,14 @@ export default function Login() {
 
           <div style={{ marginBottom: 18 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 7 }}>Email</label>
-            <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-              required autoComplete="email"
+            <input type="email" name="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              required autoComplete="username email"
               style={{ width: '100%', padding: '11px 14px', background: INPUT_BG, border: BORDER, borderRadius: 8, color: TEXT, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div style={{ marginBottom: 18 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 7 }}>Password</label>
             <div style={{ position: 'relative' }}>
-              <input type={showPw ? 'text' : 'password'} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+              <input type={showPw ? 'text' : 'password'} name="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
                 required autoComplete="current-password"
                 style={{ width: '100%', padding: '11px 42px 11px 14px', background: INPUT_BG, border: BORDER, borderRadius: 8, color: TEXT, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               <button type="button" onClick={() => setShowPw(p => !p)}

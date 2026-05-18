@@ -64,7 +64,9 @@ export default function Login() {
               setLoading(false);
             } else {
               login(data.token, data.user);
-              navigate('/app');
+              const dest = localStorage.getItem('pl_pending_onboarding') ? '/app?onboarding=1' : '/app';
+              localStorage.removeItem('pl_pending_onboarding');
+              navigate(dest);
             }
           })
           .catch(() => setLoading(false));
@@ -110,7 +112,9 @@ export default function Login() {
           storeCredential(form.email, form.password);
         }
         login(data.token, data.user);
-        navigate('/app');
+        const dest = localStorage.getItem('pl_pending_onboarding') ? '/app?onboarding=1' : '/app';
+        localStorage.removeItem('pl_pending_onboarding');
+        navigate(dest);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
@@ -124,7 +128,9 @@ export default function Login() {
       const { data } = await api.post('/auth/verify-2fa', { tempToken: twoFactor.tempToken, code: tfCode });
       if (form.password) storeCredential(form.email, form.password);
       login(data.token, data.user);
-      navigate('/app');
+      const dest = localStorage.getItem('pl_pending_onboarding') ? '/app?onboarding=1' : '/app';
+      localStorage.removeItem('pl_pending_onboarding');
+      navigate(dest);
     } catch (err) {
       setError(err.response?.data?.error || 'Verification failed');
     } finally { setTfLoading(false); }

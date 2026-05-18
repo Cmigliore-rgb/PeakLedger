@@ -3437,10 +3437,7 @@ export default function Dashboard() {
       setBaselineData(r.data);
     } catch {} finally { setBaselineRefreshing(false); }
   };
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    if (!user?.id) return false;
-    return localStorage.getItem(`pl_onboarded_${user.id}`) !== '1';
-  });
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [scrollToManual, setScrollToManual] = useState(false);
   const manualAccountsRef = useRef(null);
   useEffect(() => {
@@ -3838,19 +3835,16 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { if (cmdOpen) setTimeout(() => cmdInputRef.current?.focus(), 30); }, [cmdOpen]);
 
-  // Show onboarding for new users
+  // Show onboarding when redirected here from registration
   useEffect(() => {
-    if (!user?.id) return;
-    if (localStorage.getItem(`pl_onboarded_${user.id}`)) return;
-    setShowOnboarding(true);
-  }, [user?.id]);
-
-  // Auto-dismiss onboarding if user already has linked accounts (returning user)
-  useEffect(() => {
-    if (!showOnboarding || accounts.length === 0) return;
-    localStorage.setItem(`pl_onboarded_${user?.id}`, '1');
-    setShowOnboarding(false);
-  }, [showOnboarding, accounts.length]);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('onboarding') === '1') {
+      setShowOnboarding(true);
+      params.delete('onboarding');
+      const clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.history.replaceState({}, '', clean);
+    }
+  }, []);
 
   // Handle return from Stripe checkout or email verification
   useEffect(() => {

@@ -157,11 +157,10 @@ export default function Register() {
       });
 
       if (data.user.email_verified) {
-        // Admins and professors are auto-verified, log in immediately
         login(data.token, data.user);
-        navigate('/app');
+        navigate('/app?onboarding=1');
       } else {
-        // Everyone else: must verify email before accessing the app
+        localStorage.setItem('pl_pending_onboarding', '1');
         setPendingEmail(form.email);
         setRegToken(data.token);
       }

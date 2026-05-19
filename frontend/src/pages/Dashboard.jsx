@@ -768,7 +768,12 @@ function NetWorthChart({ snapshots }) {
   const peakY = toY(values[peakIdx]);
   const peakVal = values[peakIdx];
   const peakDate = new Date(filtered[peakIdx].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const showPeak = peakIdx !== filtered.length - 1; // don't annotate if peak is also the last point
+  const showPeak = peakIdx !== filtered.length - 1;
+  // Clamp annotation so it never clips outside the SVG
+  const annW = 80, annH = 28;
+  const annFlipDown = peakY - annH - 8 < PAD.top; // flip below point if too close to top
+  const annY = annFlipDown ? peakY + 8 : peakY - annH - 4;
+  const annX = Math.min(Math.max(peakX - annW / 2, PAD.left), W - PAD.right - annW);
 
   const PERIODS = [{ label: '7D', days: 7 }, { label: '30D', days: 30 }, { label: '90D', days: 90 }];
   const hasFullPeriod = period <= snapshots.length;
@@ -778,7 +783,7 @@ function NetWorthChart({ snapshots }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: gainColor, fontFamily: 'monospace' }}>
           {gain >= 0 ? '+' : ''}{fmt(gain)}
-          <span style={{ fontSize: 11, color: TEXT3, fontWeight: 400, marginLeft: 6 }}>this period</span>
+          <span style={{ fontSize: 11, color: TEXT3, fontWeight: 400, marginLeft: 6 }}>{gain >= 0 ? 'gained' : 'lost'} this period</span>
         </span>
         <div style={{ display: 'flex', gap: 2, background: DARK, borderRadius: 7, padding: 2 }}>
           {PERIODS.map(p => (
@@ -818,9 +823,9 @@ function NetWorthChart({ snapshots }) {
         {showPeak && (
           <g>
             <circle cx={peakX} cy={peakY} r={5} fill={BLUE} stroke={CARD_BG} strokeWidth={2} />
-            <rect x={peakX - 38} y={peakY - 32} width={76} height={26} rx={5} fill={DARK} opacity={0.92} />
-            <text x={peakX} y={peakY - 21} textAnchor="middle" fontSize={10} fontWeight="700" fill={BLUE}>{fmt(peakVal)}</text>
-            <text x={peakX} y={peakY - 10} textAnchor="middle" fontSize={9} fill={TEXT3}>{peakDate}</text>
+            <rect x={annX} y={annY} width={annW} height={annH} rx={5} fill={DARK} opacity={0.92} />
+            <text x={annX + annW / 2} y={annY + 11} textAnchor="middle" fontSize={10} fontWeight="700" fill={BLUE}>{fmt(peakVal)}</text>
+            <text x={annX + annW / 2} y={annY + 22} textAnchor="middle" fontSize={9} fill={TEXT3}>{peakDate}</text>
           </g>
         )}
         {labelIdxs.map(i => (
@@ -6831,16 +6836,10 @@ export default function Dashboard() {
                           ? `Your budget limits minus what you've spent in those categories this month. Only spending in categories with a limit counts.`
                           : `You've spent more than your combined limits this month. Review your categories to see where.`}
                       </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
-                          style={{ flex: 1, padding: '7px 0', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                          Budgeting
-                        </button>
-                        <button onClick={() => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }}
-                          style={{ flex: 1, padding: '7px 0', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                          Expenses
-                        </button>
-                      </div>
+                      <button onClick={() => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }}
+                        style={{ width: '100%', padding: '7px 0', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        View Spending by Category →
+                      </button>
                     </div>
                   );
                 })()}

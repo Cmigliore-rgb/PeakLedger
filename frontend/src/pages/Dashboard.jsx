@@ -6869,7 +6869,17 @@ export default function Dashboard() {
                           ? `Your budget limits minus what you've spent in those categories this month. Only spending in categories with a limit counts.`
                           : `You've spent more than your combined limits this month. Review your categories to see where.`}
                       </div>
-                      <button onClick={() => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false); }}
+                      <button onClick={() => {
+                        setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false);
+                        setTimeout(() => {
+                          const el = document.querySelector('[data-scroll-target="spending-by-cat"]');
+                          if (el && mainRef.current) {
+                            const containerRect = mainRef.current.getBoundingClientRect();
+                            const elRect = el.getBoundingClientRect();
+                            mainRef.current.scrollTop += elRect.top - containerRect.top - 16;
+                          }
+                        }, 80);
+                      }}
                         style={{ width: '100%', padding: '7px 0', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                         View Spending by Category →
                       </button>
@@ -8704,7 +8714,7 @@ export default function Dashboard() {
                           text={adviceState.budgeting?.text}
                         />
                       </div>
-                      <div className="lc" style={CARD}>
+                      <div className="lc" style={CARD} data-scroll-target="spending-by-cat">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

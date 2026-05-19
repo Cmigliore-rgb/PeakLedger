@@ -40,7 +40,7 @@ const RED      = 'var(--red,   #ef4444)';
 const GREEN    = 'var(--green, #4ade80)';
 const YELLOW   = '#fbbf24';
 
-const CARD = { background: CARD_BG, border: BORDER, borderRadius: 10, padding: 24 };
+const CARD = { background: CARD_BG, border: BORDER, borderRadius: 10, padding: 16 };
 
 function ConnectedAccountsCard({ onFixConnection }) {
   const [accounts, setAccounts] = useState([]);
@@ -752,7 +752,7 @@ function NetWorthChart({ snapshots }) {
     );
   }
 
-  const W = 600, H = 110, PAD = { top: 20, right: 16, bottom: 26, left: 76 };
+  const W = 600, H = 75, PAD = { top: 12, right: 16, bottom: 22, left: 70 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
@@ -3531,7 +3531,7 @@ export default function Dashboard() {
     if (Object.keys(content).length) setProfCustomContent(content);
   }, [user?.id]); // eslint-disable-line
   const getOrder = (key, defaults) => { const s = layoutOrder[key]; if (!s?.length) return defaults; const ss = new Set(s); return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))]; };
-  const handleReorder = (key, defaults) => (srcId, tgtId) => { const order = getOrder(key, defaults); const si = order.indexOf(srcId), ti = order.indexOf(tgtId); if (si === -1 || ti === -1 || si === ti) return; const next = [...order]; next.splice(si, 1); next.splice(ti, 0, srcId); setLayoutOrder(prev => ({ ...prev, [key]: next })); };
+  const handleReorder = (key, defaults) => (srcId, tgtId) => { const order = getOrder(key, defaults); const si = order.indexOf(srcId), ti = order.indexOf(tgtId); if (si === -1 || ti === -1 || si === ti) return; const next = [...order]; [next[si], next[ti]] = [next[ti], next[si]]; setLayoutOrder(prev => ({ ...prev, [key]: next })); };
   const resetLayout = (key) => setLayoutOrder(prev => { const n = { ...prev }; delete n[key]; return n; });
   const refreshConnections = async () => {
     try {
@@ -5080,8 +5080,12 @@ export default function Dashboard() {
 
       {/* ── SIDEBAR ─────────────────────────────────────── */}
       <aside style={{ width: sidebarCollapsed ? 48 : 240, flexShrink: 0, background: SIDE_BG, borderRight: BORDER, display: isMobile ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.25s ease' }}>
-        <div data-tour="brand" style={{ padding: sidebarCollapsed ? '12px 0' : '14px 14px 12px', borderBottom: BORDER, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <img src={logoSrc} alt="" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0 }} />
+        <div data-tour="brand" style={{ padding: sidebarCollapsed ? '12px 0' : '14px 14px 12px', borderBottom: BORDER, display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'flex-start', gap: 8, flexShrink: 0 }}>
+          <img
+            src={logoSrc} alt=""
+            onClick={sidebarCollapsed ? () => setSidebarCollapsed(false) : undefined}
+            style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, cursor: sidebarCollapsed ? 'pointer' : 'default' }}
+          />
           {!sidebarCollapsed && <span style={{ flex: 1, fontSize: 17, fontWeight: 700, letterSpacing: '-0.5px', color: TEXT, whiteSpace: 'nowrap', minWidth: 0 }}>PeakLedger</span>}
           {!sidebarCollapsed && (
             <button onClick={() => setNotifPanelOpen(v => !v)} style={{ position: 'relative', background: notifPanelOpen ? 'rgba(77,163,255,0.12)' : 'transparent', border: notifPanelOpen ? `1px solid rgba(77,163,255,0.3)` : '1px solid transparent', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -5093,11 +5097,13 @@ export default function Dashboard() {
               )}
             </button>
           )}
-          <button onClick={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('pl_sidebar_collapsed', String(next)); } catch {} return next; })} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={{ background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: BLUE, flexShrink: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {sidebarCollapsed ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
-            </svg>
-          </button>
+          {!sidebarCollapsed && (
+            <button onClick={() => setSidebarCollapsed(v => { const next = !v; try { localStorage.setItem('pl_sidebar_collapsed', String(next)); } catch {} return next; })} title="Collapse sidebar" style={{ background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: BLUE, flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
         </div>
         <nav style={{ flex: 1, paddingTop: 10, overflowY: 'auto' }}>
         <div data-tour="sidebar-nav">
@@ -6220,7 +6226,7 @@ export default function Dashboard() {
             Syncing <strong>{syncingBank}</strong> — transactions and balances may take 1–2 minutes to appear.
           </div>
         )}
-        <div style={{ flex: 1, padding: isMobile ? `20px 16px calc(84px + env(safe-area-inset-bottom))` : 32 }}>
+        <div style={{ flex: 1, padding: isMobile ? `16px 14px calc(80px + env(safe-area-inset-bottom))` : 20 }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: TEXT2 }}>
             Syncing your accounts...
@@ -6718,8 +6724,8 @@ export default function Dashboard() {
               return (
               <div>
                 <style>{`@keyframes pl-pulse-review { 0%,100%{box-shadow:0 0 0 0 rgba(77,163,255,0.5)} 50%{box-shadow:0 0 0 6px rgba(77,163,255,0)} }`}</style>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24 }}>
-                  <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{_g}, {_n}</h1>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+                  <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{_g}, {_n}</h1>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {_ovCustom && <button onClick={() => resetLayout('overview')} style={{ background: 'none', border: 'none', color: TEXT3, fontSize: 11, cursor: 'pointer', padding: 0 }}>Reset layout</button>}
                     <button onClick={() => setShowWidgetPicker(true)} style={{ padding: '6px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Customize</button>
@@ -6727,7 +6733,7 @@ export default function Dashboard() {
                 </div>
 
                 {isAdmin && !viewAs && isDemoData && !connectBannerDismissed && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', borderLeft: '3px solid #4ade80', borderRadius: 10, marginBottom: 24 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', borderLeft: '3px solid #4ade80', borderRadius: 10, marginBottom: 14 }}>
                     <span style={{ fontSize: 20 }}>🔗</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>You're viewing demo data</div>
@@ -6859,7 +6865,7 @@ export default function Dashboard() {
                     Demo data. Connect an account to see your real numbers.
                   </div>
                 )}
-                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 10 : 16, marginBottom: 24, marginTop: isDemoData ? 8 : 24, alignItems: 'start' }}>
+                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 8 : 12, marginBottom: 16, marginTop: isDemoData ? 6 : 16, alignItems: 'start' }}>
                   {(() => {
                     const NW_CARDS = [
                       { key: 'nw',   label: 'Net Worth',         value: fmt(animNetWorth),    sub: 'Assets − Liabilities' },
@@ -6877,7 +6883,7 @@ export default function Dashboard() {
                           </div>
                         )}
                         <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{card.label}</div>
-                        <div style={{ fontSize: isMobile ? 20 : 30, fontWeight: 700, margin: isMobile ? 0 : '8px 0 4px', letterSpacing: '-1px' }}>{card.value}</div>
+                        <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, margin: isMobile ? 0 : '6px 0 2px', letterSpacing: '-0.5px' }}>{card.value}</div>
                         {!isMobile && <div style={{ fontSize: 12, color: TEXT2 }}>{card.sub}</div>}
                       </div>
                     ));
@@ -7495,7 +7501,7 @@ export default function Dashboard() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                   <div>
                                     <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Month-to-Date Spending</div>
-                                    <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color: TEXT, marginBottom: 4 }}>{fmt(activeMonthlySpend)}</div>
+                                    <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color: TEXT, marginBottom: 4 }}>{fmt(activeMonthlySpend)}</div>
                                     <div style={{ fontSize: 12, color: TEXT2 }}>Set spending limits to see how much you have left</div>
                                   </div>
                                   <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
@@ -7522,11 +7528,11 @@ export default function Dashboard() {
                         const isPositive = freeToSpend >= 0;
                         const color = isPositive ? GREEN : RED;
                         return (
-                          <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50`, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                               <div>
                                 <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
-                                <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
+                                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color, marginBottom: 4 }}>
                                   {isPositive ? '' : '−'}{fmt(Math.abs(freeToSpend))}
                                 </div>
                                 <div style={{ fontSize: 12, color: TEXT2 }}>{subtitle}</div>
@@ -7597,7 +7603,7 @@ export default function Dashboard() {
                               </div>
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                              <div style={{ fontSize: 32, fontWeight: 800, color: rateColor, letterSpacing: '-1.5px', lineHeight: 1, flexShrink: 0 }}>{rate !== null ? `${rate}%` : '—'}</div>
+                              <div style={{ fontSize: 22, fontWeight: 800, color: rateColor, letterSpacing: '-0.5px', lineHeight: 1, flexShrink: 0 }}>{rate !== null ? `${rate}%` : '—'}</div>
                               <div style={{ fontSize: 11, color: TEXT3, lineHeight: 1.5 }}>saved this month</div>
                             </div>
                             <div style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: BORDER }}>
@@ -7757,7 +7763,7 @@ export default function Dashboard() {
                         </div>
                       );
                       case 'txns': return (
-                        <div data-tour="overview-txns" className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden', height: '100%', boxSizing: 'border-box' }}>
+                        <div data-tour="overview-txns" className="lc" style={{ ...CARD, marginBottom: 16, minWidth: 0, overflow: 'hidden', height: '100%', boxSizing: 'border-box' }}>
                           <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Transactions</div>
                           {transactions.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '28px 16px' }}>
@@ -7846,8 +7852,16 @@ export default function Dashboard() {
                         });
                         const subBillEvents = [];
                         if (!isDemoData && activeTxns.length > 0) {
+                          const NON_SUB_CAL = new Set(['GAS_STATIONS','GROCERIES','TRANSFER_IN','TRANSFER_OUT','CREDIT_CARD_PAYMENT','LOAN_PAYMENTS']);
                           const subGroups = {};
-                          activeTxns.filter(t => t.amount > 0).forEach(t => {
+                          activeTxns.filter(t => {
+                            if (t.amount <= 0 || isTransfer(t)) return false;
+                            const cat = resolveCategory(t);
+                            if (NON_SUB_CAL.has(cat)) return false;
+                            if (GAS_RE.test(t.merchant_name || t.name || '')) return false;
+                            if (GROCERY_RE.test(t.merchant_name || t.name || '')) return false;
+                            return true;
+                          }).forEach(t => {
                             const key = (t.merchant_name || t.name || '').toLowerCase().trim();
                             if (!key) return;
                             if (!subGroups[key]) subGroups[key] = { name: t.merchant_name || t.name, txns: [] };
@@ -7885,7 +7899,7 @@ export default function Dashboard() {
                           setEditingEvent(null); setShowEventForm(false); setSelectedDay(null);
                         };
                         return (
-                          <div data-tour="overview-calendar" className="lc" style={{ ...CARD, marginTop: 16, padding: isMobile ? 14 : 24 }}>
+                          <div data-tour="overview-calendar" className="lc" style={{ ...CARD, marginBottom: 16, padding: isMobile ? 14 : 24 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                               <div style={{ fontWeight: 600 }}>Calendar</div>
                               <div style={{ display: 'flex', gap: 8 }}>
@@ -8089,31 +8103,51 @@ export default function Dashboard() {
                       case 'subscriptions': return (() => {
                         const NON_SUB = new Set(['GAS_STATIONS','GROCERIES','TRANSFER_IN','TRANSFER_OUT','CREDIT_CARD_PAYMENT','LOAN_PAYMENTS']);
                         const groups = {};
-                        activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && !NON_SUB.has(resolveCategory(t))).forEach(t => {
+                        activeTxns.filter(t => {
+                          if (t.amount <= 0 || isTransfer(t)) return false;
+                          const cat = resolveCategory(t);
+                          if (NON_SUB.has(cat)) return false;
+                          if (GAS_RE.test(t.merchant_name || t.name || '')) return false;
+                          if (GROCERY_RE.test(t.merchant_name || t.name || '')) return false;
+                          return true;
+                        }).forEach(t => {
                           const key = (t.merchant_name || t.name || '').toLowerCase().trim();
                           if (!key) return;
                           if (!groups[key]) groups[key] = { name: t.merchant_name || t.name, txns: [] };
                           groups[key].txns.push(t);
                         });
-                        const subs = Object.values(groups).filter(g => {
-                          if (g.txns.length < 2) return false;
-                          const sorted = [...g.txns].sort((a, b) => new Date(a.date) - new Date(b.date));
-                          const avg = sorted.reduce((s, t) => s + t.amount, 0) / sorted.length;
-                          return sorted.every(t => Math.abs(t.amount - avg) / avg <= 0.15);
-                        }).map(g => {
-                          const avg = g.txns.reduce((s, t) => s + t.amount, 0) / g.txns.length;
-                          return { name: g.name, monthlyCost: avg };
-                        }).sort((a, b) => b.monthlyCost - a.monthlyCost).slice(0, 6);
-                        const total = subs.reduce((s, sub) => s + sub.monthlyCost, 0);
+                        const subs = [];
+                        Object.values(groups).forEach(({ name, txns }) => {
+                          if (txns.length < 2) return;
+                          const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                          const amounts = sorted.map(t => t.amount);
+                          const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+                          if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
+                          const gaps = [];
+                          for (let i = 1; i < sorted.length; i++) gaps.push((new Date(sorted[i].date) - new Date(sorted[i-1].date)) / 86400000);
+                          const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+                          if (gaps.some(g => Math.abs(g - avgGap) > avgGap * 0.5)) return;
+                          let monthlyCost;
+                          if      (avgGap >= 5   && avgGap <= 9)   monthlyCost = avgAmt * 4.33;
+                          else if (avgGap >= 12  && avgGap <= 18)  monthlyCost = avgAmt * 2.17;
+                          else if (avgGap >= 26  && avgGap <= 40)  monthlyCost = avgAmt;
+                          else if (avgGap >= 85  && avgGap <= 100) monthlyCost = avgAmt / 3;
+                          else if (avgGap >= 340 && avgGap <= 390) monthlyCost = avgAmt / 12;
+                          else return;
+                          subs.push({ name, monthlyCost });
+                        });
+                        subs.sort((a, b) => b.monthlyCost - a.monthlyCost);
+                        const top = subs.slice(0, 6);
+                        const total = top.reduce((s, sub) => s + sub.monthlyCost, 0);
                         return (
                           <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
                               <div style={{ fontWeight: 600 }}>Subscriptions</div>
-                              {subs.length > 0 && <span style={{ fontSize: 12, color: RED, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(total)}/mo</span>}
+                              {top.length > 0 && <span style={{ fontSize: 12, color: RED, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(total)}/mo</span>}
                             </div>
-                            {subs.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No recurring charges detected.</div> : (
+                            {top.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No recurring charges detected.</div> : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                                {subs.map(sub => (
+                                {top.map(sub => (
                                   <div key={sub.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER_C}` }}>
                                     <span style={{ fontSize: 12, color: TEXT }}>{sub.name}</span>
                                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: RED }}>{fmt(sub.monthlyCost)}</span>
@@ -8209,7 +8243,7 @@ export default function Dashboard() {
                       })();
                       case 'budget-progress': return (() => {
                         const _bpHasCCAccts = activeAccounts.some(a => a.type === 'credit');
-                        const limitEntries = Object.entries(budgetLimits).filter(([cat]) => !(_bpHasCCAccts && cat === 'CREDIT_CARD_PAYMENT'));
+                        const limitEntries = Object.entries(budgetLimits).filter(([cat]) => cat !== 'CREDIT_CARD_PAYMENT');
                         if (limitEntries.length === 0) return (
                           <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
                             <div style={{ fontWeight: 600, marginBottom: 8 }}>Budget Progress</div>
@@ -8262,7 +8296,7 @@ export default function Dashboard() {
                           );
                         }
                         return (
-                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'stretch' }}>
+                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'stretch', marginBottom: 16 }}>
                             {row.keys.map(key => (
                               <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                                 {renderWidget(key)}

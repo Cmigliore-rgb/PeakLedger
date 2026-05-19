@@ -709,6 +709,8 @@ function PieDonut({ slices, size = 140, onSliceClick }) {
 // Simple SVG line chart
 function NetWorthChart({ snapshots }) {
   const [period, setPeriod] = useState(30);
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const svgRef = useRef(null);
 
   if (!snapshots || snapshots.length === 0) {
     return (
@@ -775,6 +777,19 @@ function NetWorthChart({ snapshots }) {
   const annY = annFlipDown ? peakY + 8 : peakY - annH - 4;
   const annX = Math.min(Math.max(peakX - annW / 2, PAD.left), W - PAD.right - annW);
 
+  const getIdx = (clientX) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const svgX = (clientX - rect.left) * (W / rect.width) - PAD.left;
+    return Math.max(0, Math.min(filtered.length - 1, Math.round((svgX / innerW) * (filtered.length - 1))));
+  };
+
+  const hSnap = hoverIdx != null ? filtered[hoverIdx] : null;
+  const hX    = hoverIdx != null ? toX(hoverIdx) : null;
+  const hY    = hoverIdx != null ? toY(filtered[hoverIdx].value) : null;
+  const tipOnLeft = hoverIdx != null && (hoverIdx / (filtered.length - 1)) > 0.55;
+
   const PERIODS = [{ label: '7D', days: 7 }, { label: '30D', days: 30 }, { label: '90D', days: 90 }];
   const hasFullPeriod = period <= snapshots.length;
 
@@ -803,7 +818,19 @@ function NetWorthChart({ snapshots }) {
           {snapshots.length} of {period} days of history collected. Chart fills in daily.
         </div>
       )}
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+      {hSnap && (
+        <div style={{ display: 'flex', justifyContent: tipOnLeft ? 'flex-start' : 'flex-end', marginBottom: 4 }}>
+          <div style={{ background: DARK, border: BORDER, borderRadius: 7, padding: '5px 12px', display: 'inline-flex', gap: 14, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: TEXT3 }}>{new Date(hSnap.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: hSnap.value >= 0 ? TEXT : RED }}>{hSnap.value < 0 ? '−' : ''}{fmt(Math.abs(hSnap.value))}</span>
+          </div>
+        </div>
+      )}
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', cursor: 'crosshair' }}
+        onMouseMove={e => setHoverIdx(getIdx(e.clientX))}
+        onMouseLeave={() => setHoverIdx(null)}
+        onTouchMove={e => { e.preventDefault(); setHoverIdx(getIdx(e.touches[0].clientX)); }}
+        onTouchEnd={() => setHoverIdx(null)}>
         {[0, 0.5, 1].map(t => {
           const v = minV + t * range;
           const y = toY(v);
@@ -820,13 +847,19 @@ function NetWorthChart({ snapshots }) {
         <polyline points={points} fill="none" stroke={BLUE} strokeWidth={2} strokeLinejoin="round" />
         <circle cx={toX(0)} cy={toY(values[0])} r={3} fill={BLUE} />
         <circle cx={toX(filtered.length - 1)} cy={toY(values[values.length - 1])} r={4} fill={BLUE} />
-        {showPeak && (
+        {showPeak && !hSnap && (
           <g>
             <circle cx={peakX} cy={peakY} r={5} fill={BLUE} stroke={CARD_BG} strokeWidth={2} />
             <rect x={annX} y={annY} width={annW} height={annH} rx={5} fill={DARK} opacity={0.92} />
             <text x={annX + annW / 2} y={annY + 11} textAnchor="middle" fontSize={10} fontWeight="700" fill={BLUE}>{fmt(peakVal)}</text>
             <text x={annX + annW / 2} y={annY + 22} textAnchor="middle" fontSize={9} fill={TEXT3}>{peakDate}</text>
           </g>
+        )}
+        {hSnap && (
+          <>
+            <line x1={hX} y1={PAD.top} x2={hX} y2={H - PAD.bottom} stroke={BORDER_C} strokeWidth={1} strokeDasharray="3,2" />
+            <circle cx={hX} cy={hY} r={4.5} fill={BLUE} stroke={CARD_BG} strokeWidth={2} />
+          </>
         )}
         {labelIdxs.map(i => (
           <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={10} fill={TEXT3}>
@@ -6836,7 +6869,7 @@ export default function Dashboard() {
                           ? `Your budget limits minus what you've spent in those categories this month. Only spending in categories with a limit counts.`
                           : `You've spent more than your combined limits this month. Review your categories to see where.`}
                       </div>
-                      <button onClick={() => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }}
+                      <button onClick={() => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false); }}
                         style={{ width: '100%', padding: '7px 0', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                         View Spending by Category →
                       </button>

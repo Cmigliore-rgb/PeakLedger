@@ -3397,7 +3397,15 @@ export default function Dashboard() {
   const [txnCategoryOverrides, setTxnCategoryOverrides] = React.useState({});
   const [recatOpen, setRecatOpen] = React.useState(null);
   const resolveCategory = React.useCallback((txn) => { const id = txn.transaction_id; if (id && txnCategoryOverrides[id]) return txnCategoryOverrides[id]; return _resolveCategory(txn); }, [txnCategoryOverrides]);
-  const saveCatOverride = React.useCallback((txnId, category) => { setTxnCategoryOverrides(prev => { const n = { ...prev }; if (category) n[txnId] = category; else delete n[txnId]; localStorage.setItem(`pl_cat_overrides_${user?.id}`, JSON.stringify(n)); return n; }); }, [user?.id]); // eslint-disable-line
+  const saveCatOverride = React.useCallback((txnId, category) => {
+    setTxnCategoryOverrides(prev => {
+      const n = { ...prev };
+      if (category) n[txnId] = category; else delete n[txnId];
+      localStorage.setItem(`pl_cat_overrides_${user?.id}`, JSON.stringify(n));
+      api.put('/category-overrides', { [txnId]: category || null }).catch(() => {});
+      return n;
+    });
+  }, [user?.id]); // eslint-disable-line
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifEmailStatus, setNotifEmailStatus] = useState(null);
   const [notifConfigured, setNotifConfigured] = useState(false);
@@ -3505,6 +3513,12 @@ export default function Dashboard() {
     if (Object.keys(emojis).length) setCategoryEmojis(emojis);
     const overrides = get('pl_cat_overrides', {});
     if (Object.keys(overrides).length) setTxnCategoryOverrides(overrides);
+    api.get('/category-overrides').then(r => {
+      if (r.data?.overrides && Object.keys(r.data.overrides).length) {
+        setTxnCategoryOverrides(prev => ({ ...prev, ...r.data.overrides }));
+        localStorage.setItem(`pl_cat_overrides_${uid}`, JSON.stringify({ ...overrides, ...r.data.overrides }));
+      }
+    }).catch(() => {});
     const tickers = get('pl_tickers', []);
     if (tickers.length) setCustomTickers(tickers);
     const cal = get('pl_calendar', []);
@@ -6872,7 +6886,7 @@ export default function Dashboard() {
                 </div>{/* overview-snapshot */}
                 </DragSection>
 
-                {(ovEnabled.has('free-to-spend') || ovEnabled.has('savings-rate')) && (
+                {false && (
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (ovEnabled.has('free-to-spend') && ovEnabled.has('savings-rate') ? '1fr 1fr' : '1fr'), gap: 16, marginBottom: 0, alignItems: 'stretch' }}>
                 {ovEnabled.has('free-to-spend') && <DragSection id="free-to-spend" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 {(() => {
@@ -7035,7 +7049,7 @@ export default function Dashboard() {
                 </div>
                 )}
 
-                {ovEnabled.has('chart') && <DragSection id="chart" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                {false && <DragSection id="chart" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div data-tour="overview-networth-chart" style={{ ...CARD, marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>Net Worth History</div>
@@ -7050,7 +7064,7 @@ export default function Dashboard() {
                 </div>
                 </DragSection>}
 
-                {(ovEnabled.has('goals') || ovEnabled.has('txns')) && (
+                {false && (
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (ovEnabled.has('goals') && ovEnabled.has('txns') ? '2fr 3fr' : '1fr'), gap: 16, marginBottom: 0, alignItems: 'stretch' }}>
                 {ovEnabled.has('goals') && <DragSection id="goals" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
@@ -7219,7 +7233,7 @@ export default function Dashboard() {
                 </div>
                 )}
 
-                {ovEnabled.has('calendar') && <DragSection id="calendar" panel="overview" order={_ovOrder} onReorder={_ovReorder} handleTop={22}>
+                {false && <DragSection id="calendar" panel="overview" order={_ovOrder} onReorder={_ovReorder} handleTop={22}>
                 {(() => {
                   const EVENT_TYPES = {
                     reminder:     { label: 'Reminder',     color: BLUE   },
@@ -7449,20 +7463,554 @@ export default function Dashboard() {
                 })()}
                 </DragSection>}
 
-                {/* ── Additional Widgets (opt-in) ── */}
+                {/* ── Unified Widget Renderer ── */}
                 {(() => {
-                  const _newHalves = ['market-alerts','top-spending','account-balances','subscriptions','investment-snapshot','debt-summary','budget-progress'].filter(k => ovEnabled.has(k));
-                  const _newFulls  = ['cash-flow-baseline'].filter(k => ovEnabled.has(k));
-                  if (!_newHalves.length && !_newFulls.length) return null;
-                  // pair halves into rows
-                  const _nwRows = [];
-                  for (let _ni = 0; _ni < _newHalves.length; _ni += 2) {
-                    if (_ni + 1 < _newHalves.length) _nwRows.push([_newHalves[_ni], _newHalves[_ni+1]]);
-                    else _nwRows.push([_newHalves[_ni]]);
-                  }
                   const ACCT_TYPE_COLOR = { checking: BLUE, savings: GREEN, credit: RED, investment: '#a78bfa', loan: YELLOW, mortgage: YELLOW, student: YELLOW };
-                  const renderNewWidget = (key) => {
-                    switch (key) {
+                  const _nonStatRows = _ovRows.filter(row => !(row.type === 'full' && row.keys[0] === 'stats'));
+                  const renderWidget = (widgetKey) => {
+                    switch (widgetKey) {
+                      case 'free-to-spend': return (() => {
+                        const now = new Date();
+                        let freeToSpend, subtitle;
+                        if (isDemoData) {
+                          freeToSpend = 480;
+                          subtitle = 'Remaining this month based on budget limits';
+                        } else {
+                          const _ftspHasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                          const monthStart2 = new Date(now.getFullYear(), now.getMonth(), 1);
+                          const thisMonthCats = new Set(
+                            activeTxns.filter(t => {
+                              if (t.amount <= 0 || isTransfer(t)) return false;
+                              if (_ftspHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
+                              const d = new Date(t.date);
+                              return d >= monthStart2 && d <= now;
+                            }).map(t => resolveCategory(t))
+                          );
+                          const limitEntries = Object.entries(budgetLimits).filter(([cat]) =>
+                            !(_ftspHasCCAccts && cat === 'CREDIT_CARD_PAYMENT') && thisMonthCats.has(cat)
+                          );
+                          if (limitEntries.length === 0) {
+                            return (
+                              <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <div>
+                                    <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Month-to-Date Spending</div>
+                                    <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color: TEXT, marginBottom: 4 }}>{fmt(activeMonthlySpend)}</div>
+                                    <div style={{ fontSize: 12, color: TEXT2 }}>Set spending limits to see how much you have left</div>
+                                  </div>
+                                  <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
+                                    style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    Set Limits
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+                          const totalBudgeted = limitEntries.reduce((s, [, v]) => s + v, 0);
+                          const limitedCatSpend = limitEntries.reduce((s, [cat]) => {
+                            const catTotal = activeTxns.filter(t => {
+                              if (t.amount <= 0 || isTransfer(t)) return false;
+                              if (_ftspHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
+                              const d = new Date(t.date);
+                              return d >= monthStart2 && d <= now && resolveCategory(t) === cat;
+                            }).reduce((a, t) => a + t.amount, 0);
+                            return s + catTotal;
+                          }, 0);
+                          freeToSpend = totalBudgeted - limitedCatSpend;
+                          subtitle = `${fmt(limitedCatSpend)} spent of ${fmt(totalBudgeted)} budgeted`;
+                        }
+                        const isPositive = freeToSpend >= 0;
+                        const color = isPositive ? GREEN : RED;
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50`, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                              <div>
+                                <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
+                                <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
+                                  {isPositive ? '' : '−'}{fmt(Math.abs(freeToSpend))}
+                                </div>
+                                <div style={{ fontSize: 12, color: TEXT2 }}>{subtitle}</div>
+                              </div>
+                              <div style={{ fontSize: 11, color: TEXT3, textAlign: 'right', lineHeight: 1.5 }}>
+                                <div style={{ fontSize: 22, marginBottom: 2 }}>{isPositive ? '✓' : '⚠'}</div>
+                                <div style={{ color }}>{isPositive ? 'On track' : 'Over budget'}</div>
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: TEXT3, marginBottom: 12, lineHeight: 1.5 }}>
+                              {isPositive
+                                ? `Your budget limits minus what you've spent in those categories this month. Only spending in categories with a limit counts.`
+                                : `You've spent more than your combined limits this month. Review your categories to see where.`}
+                            </div>
+                            <button onClick={() => {
+                              setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false);
+                              setTimeout(() => {
+                                const el = document.querySelector('[data-scroll-target="spending-by-cat"]');
+                                if (el && mainRef.current) {
+                                  const containerRect = mainRef.current.getBoundingClientRect();
+                                  const elRect = el.getBoundingClientRect();
+                                  mainRef.current.scrollTop += elRect.top - containerRect.top - 16;
+                                }
+                              }, 80);
+                            }}
+                              style={{ width: '100%', padding: '7px 0', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                              View Spending by Category →
+                            </button>
+                          </div>
+                        );
+                      })();
+                      case 'savings-rate': return (() => {
+                        const now = new Date();
+                        const DEMO = { monthIncome: 4850, monthSpending: 3620, saved: 1230, rate: 25 };
+                        let monthIncome, monthSpending, saved, rate;
+                        if (isDemoData) {
+                          ({ monthIncome, monthSpending, saved, rate } = DEMO);
+                        } else {
+                          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                          const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
+                          const INCOME_CATS_SR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
+                          monthIncome = monthTxns.filter(t => {
+                            if (t.amount >= 0 || isTransfer(t)) return false;
+                            const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
+                            return [...INCOME_CATS_SR].some(k => cat.includes(k));
+                          }).reduce((s, t) => s + Math.abs(t.amount), 0);
+                          const _srHasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                          monthSpending = monthTxns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_srHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0);
+                          saved = monthIncome - monthSpending;
+                          rate = monthIncome > 0 ? Math.round((saved / monthIncome) * 100) : null;
+                        }
+                        const rateColor = rate === null ? TEXT2 : rate >= 20 ? GREEN : rate >= 10 ? YELLOW : rate >= 0 ? TEXT : RED;
+                        const TARGET = 20;
+                        const _reviewKeyInner = `pl_review_seen_${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}_${user?.id}`;
+                        const _reviewSeenInner = !!localStorage.getItem(_reviewKeyInner);
+                        return (
+                          <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isDemoData ? 8 : 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700 }}>Monthly Savings Rate</div>
+                                <button onClick={() => openTourAt(2)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', color: TEXT3, fontSize: 9, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
+                              </div>
+                              <div style={{ fontSize: 11, color: TEXT2 }}>{now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
+                            </div>
+                            {isDemoData && (
+                              <div style={{ fontSize: 10, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '4px 10px', marginBottom: 10, display: 'inline-block' }}>
+                                Demo data — connect to see real savings rate.
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                              <div style={{ fontSize: 32, fontWeight: 800, color: rateColor, letterSpacing: '-1.5px', lineHeight: 1, flexShrink: 0 }}>{rate !== null ? `${rate}%` : '—'}</div>
+                              <div style={{ fontSize: 11, color: TEXT3, lineHeight: 1.5 }}>saved this month</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: BORDER }}>
+                              {[
+                                { label: 'Income',   value: fmt(monthIncome),  color: GREEN },
+                                { label: 'Spending', value: fmt(monthSpending), color: RED   },
+                                { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`, color: saved >= 0 ? GREEN : RED },
+                              ].map(({ label, value, color }, i) => (
+                                <div key={label} style={{ flex: 1, padding: '8px 0', textAlign: 'center', borderLeft: i > 0 ? BORDER : 'none' }}>
+                                  <div style={{ fontSize: 9, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3 }}>{label}</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{ background: MUTED, borderRadius: 4, height: 5, overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(Math.max(rate ?? 0, 0), 100)}%`, height: '100%', background: rateColor, borderRadius: 4, transition: 'width 0.6s ease' }} />
+                            </div>
+                            <div style={{ position: 'relative', marginTop: 4, fontSize: 10, color: TEXT3, height: 13, marginBottom: 12 }}>
+                              <span style={{ position: 'absolute', left: 0 }}>0%</span>
+                              <span style={{ position: 'absolute', left: `${TARGET}%`, transform: 'translateX(-50%)', color: rate !== null && rate >= TARGET ? GREEN : TEXT3 }}>{TARGET}% target</span>
+                              <span style={{ position: 'absolute', right: 0 }}>100%</span>
+                            </div>
+                            {!isDemoData && (
+                              <button
+                                onClick={() => { setShowMonthlyReview(true); localStorage.setItem(_reviewKeyInner, '1'); }}
+                                style={{ marginTop: 'auto', width: '100%', padding: '7px 0', background: _reviewSeenInner ? 'rgba(255,255,255,0.03)' : 'rgba(77,163,255,0.1)', border: _reviewSeenInner ? BORDER : '1px solid rgba(77,163,255,0.35)', borderRadius: 7, color: _reviewSeenInner ? TEXT3 : BLUE, fontSize: 12, fontWeight: 600, cursor: 'pointer', animation: _reviewSeenInner ? 'none' : 'pl-pulse-review 1.8s ease-in-out infinite' }}>
+                                {now.toLocaleDateString('en-US', { month: 'long' })} Review →
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })();
+                      case 'chart': return (
+                        <div data-tour="overview-networth-chart" style={{ ...CARD, marginBottom: 16 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>Net Worth History</div>
+                            <button onClick={() => openTourAt(3)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
+                          </div>
+                          {isDemoData && (
+                            <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>
+                              Demo data. Connect an account to see your real history.
+                            </div>
+                          )}
+                          <NetWorthChart snapshots={isDemoData ? DEMO_SNAPSHOTS : snapshots} />
+                        </div>
+                      );
+                      case 'goals': return (
+                        <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: goals.length ? 16 : 0 }}>
+                            <div style={{ fontWeight: 600 }}>Savings Goals</div>
+                            <button onClick={() => { setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }}
+                              style={{ padding: '5px 14px', background: BLUE_BTN, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                              + New Goal
+                            </button>
+                          </div>
+                          {showGoalForm && (
+                            <div style={{ marginBottom: 16, padding: 16, background: DARK, borderRadius: 8, border: BORDER }}>
+                              {!editingGoal && (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div style={{ fontSize: 10, color: TEXT3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Quick Presets</div>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {[
+                                      { name: 'Recruiting Season Fund', target: '1500', desc: 'Suit, flights, hotels for interviews' },
+                                      { name: 'Emergency Fund',         target: '1000', desc: '1 month of expenses' },
+                                      { name: 'Spring Break',           target: '600',  desc: 'Travel and lodging' },
+                                      { name: 'Laptop Upgrade',         target: '1200', desc: 'New machine for senior year' },
+                                    ].map(p => (
+                                      <button key={p.name} onClick={() => setGoalForm(f => ({ ...f, name: p.name, target: p.target }))}
+                                        title={p.desc}
+                                        style={{ padding: '5px 12px', background: goalForm.name === p.name ? `${BLUE_BTN}22` : MUTED, border: `1px solid ${goalForm.name === p.name ? BLUE_BTN : BORDER_C}`, borderRadius: 20, color: goalForm.name === p.name ? BLUE : TEXT2, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                        {p.name === 'Recruiting Season Fund' ? '★ ' : ''}{p.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                                {[
+                                  { label: 'Goal Name',     type: 'text',   key: 'name',   placeholder: 'e.g. Emergency Fund' },
+                                  { label: 'Target Amount', type: 'number', key: 'target', placeholder: 'e.g. 10000' },
+                                ].map(({ label, type, key, placeholder }) => (
+                                  <div key={key}>
+                                    <div style={{ fontSize: 10, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>{label}</div>
+                                    <input type={type} value={goalForm[key]} onChange={e => setGoalForm(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder}
+                                      style={{ width: '100%', padding: '8px 10px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                                  </div>
+                                ))}
+                                <div>
+                                  <div style={{ fontSize: 10, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Link Account</div>
+                                  <select value={goalForm.accountId} onChange={e => setGoalForm(f => ({ ...f, accountId: e.target.value }))}
+                                    style={{ width: '100%', padding: '8px 10px', background: MUTED, border: BORDER, borderRadius: 7, color: goalForm.accountId ? TEXT : TEXT2, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}>
+                                    <option value="">No account</option>
+                                    {accounts.map(a => <option key={a.account_id} value={a.account_id}>{a.name} ({fmt(a.balances?.current)})</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={async () => {
+                                  if (!goalForm.name || !goalForm.target) return;
+                                  try {
+                                    if (editingGoal) {
+                                      const res = await api.put(`/goals/${editingGoal.id}`, goalForm);
+                                      setGoals(prev => prev.map(g => g.id === editingGoal.id ? res.data.goal : g));
+                                    } else {
+                                      const res = await api.post('/goals', goalForm);
+                                      setGoals(prev => [...prev, res.data.goal]);
+                                    }
+                                    setShowGoalForm(false); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' });
+                                  } catch (err) { console.error(err); }
+                                }} style={{ padding: '7px 18px', background: BLUE_BTN, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                  {editingGoal ? 'Save' : 'Create'}
+                                </button>
+                                <button onClick={() => { setShowGoalForm(false); setEditingGoal(null); }} style={{ padding: '7px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                              </div>
+                            </div>
+                          )}
+                          {goals.length === 0 && !showGoalForm ? (
+                            <div style={{ color: TEXT3, fontSize: 13, padding: '8px 0' }}>No goals yet. Track your savings targets here.</div>
+                          ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                              {goals.map(goal => {
+                                const acct    = accounts.find(a => a.account_id === goal.accountId);
+                                const current = acct ? (acct.balances?.current || 0) : 0;
+                                const pct     = Math.min((current / goal.target) * 100, 100);
+                                const done    = current >= goal.target;
+                                const barColor = done ? GREEN : pct >= 75 ? BLUE : BLUE_BTN;
+                                return (
+                                  <div key={goal.id} style={{ background: DARK, borderRadius: 8, padding: '14px 16px', border: BORDER }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                                      <div>
+                                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{goal.name}</div>
+                                        <div style={{ fontSize: 11, color: TEXT3 }}>{acct ? acct.name : 'No account linked'}</div>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        {done && <span style={{ fontSize: 9, fontWeight: 700, color: GREEN, background: 'rgba(74,222,128,0.12)', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>Done</span>}
+                                        <button onClick={() => { setEditingGoal(goal); setGoalForm({ name: goal.name, target: String(goal.target), accountId: goal.accountId || '' }); setShowGoalForm(true); }}
+                                          style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 11, padding: '2px 4px' }}>Edit</button>
+                                        <button onClick={async () => { await api.delete(`/goals/${goal.id}`); setGoals(prev => prev.filter(g => g.id !== goal.id)); }}
+                                          style={{ background: 'none', border: 'none', color: RED, cursor: 'pointer', fontSize: 11, padding: '2px 4px' }}>✕</button>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                                      <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', color: done ? GREEN : TEXT }}>{acct ? fmt(current) : '—'}</span>
+                                      <span style={{ fontSize: 12, color: TEXT2 }}>of {fmt(goal.target)}</span>
+                                    </div>
+                                    <div style={{ height: 6, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: `${acct ? pct : 0}%`, background: barColor, borderRadius: 3, transition: 'width 0.4s ease' }} />
+                                    </div>
+                                    <div style={{ fontSize: 11, color: TEXT3, marginTop: 5 }}>
+                                      {acct ? `${pct.toFixed(0)}% · ${done ? 'Goal reached!' : fmt(goal.target - current) + ' to go'}` : 'Link an account to track'}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                      case 'txns': return (
+                        <div data-tour="overview-txns" className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden', height: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Transactions</div>
+                          {transactions.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '28px 16px' }}>
+                              <div style={{ fontSize: 28, marginBottom: 8 }}>↕</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: TEXT2, marginBottom: 4 }}>No transactions yet</div>
+                              <div style={{ fontSize: 12, color: TEXT3 }}>Connect a bank account to see your spending here.</div>
+                            </div>
+                          ) : (
+                            <div className="card-scroll" style={{ maxHeight: 220 }}>
+                              {(() => {
+                                const todayStr = new Date().toISOString().slice(0, 10);
+                                const yestStr  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                                const items = [];
+                                let lastDate = null;
+                                transactions.forEach((t, i) => {
+                                  const d = (t.date || '').slice(0, 10);
+                                  if (d !== lastDate) {
+                                    const label = d === todayStr ? 'Today' : d === yestStr ? 'Yesterday'
+                                      : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                    items.push({ type: 'header', label, key: `h-${d}` });
+                                    lastDate = d;
+                                  }
+                                  items.push({ type: 'txn', t, i });
+                                });
+                                return items.map(item => {
+                                  if (item.type === 'header') return (
+                                    <div key={item.key} style={{ padding: '10px 0 4px', fontSize: 10, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '0.7px' }}>{item.label}</div>
+                                  );
+                                  const { t, i } = item;
+                                  return (
+                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${BORDER_C}`, gap: 10 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                        <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={32} radius={8} />
+                                        <div style={{ minWidth: 0 }}>
+                                          <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.merchant_name || t.name}</div>
+                                          <div style={{ fontSize: 12, color: TEXT2 }}>{fmtCat(resolveCategory(t))}</div>
+                                        </div>
+                                      </div>
+                                      <div style={{ fontWeight: 600, color: t.amount > 0 ? RED : GREEN, fontFamily: 'monospace', flexShrink: 0 }}>
+                                        {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
+                                      </div>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      );
+                      case 'calendar': return (() => {
+                        const EVENT_TYPES = {
+                          reminder:     { label: 'Reminder',    color: BLUE   },
+                          bill:         { label: 'Bill Due',     color: RED    },
+                          income:       { label: 'Income',       color: GREEN  },
+                          subscription: { label: 'Subscription', color: '#f97316' },
+                          goal:         { label: 'Goal',         color: '#a78bfa' },
+                        };
+                        const yr  = calViewDate.getFullYear();
+                        const mo  = calViewDate.getMonth();
+                        const firstDay = new Date(yr, mo, 1).getDay();
+                        const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const monthStr = `${yr}-${String(mo + 1).padStart(2, '0')}`;
+                        const liabBillEvents = [];
+                        [
+                          ...(liabilities.credit   || []).map(l => ({ l, ltype: 'credit'   })),
+                          ...(liabilities.student  || []).map(l => ({ l, ltype: 'student'  })),
+                          ...(liabilities.mortgage || []).map(l => ({ l, ltype: 'mortgage' })),
+                          ...(liabilities.car      || []).map(l => ({ l, ltype: 'car'      })),
+                        ].forEach(({ l, ltype }) => {
+                          if (!l.next_payment_due_date) return;
+                          const dueDay = new Date(l.next_payment_due_date + 'T00:00:00').getDate();
+                          const calDue = new Date(yr, mo, dueDay);
+                          if (calDue.getMonth() !== mo) return;
+                          const dateStr = `${monthStr}-${String(dueDay).padStart(2, '0')}`;
+                          const acct = accounts.find(a => a.account_id === l.account_id);
+                          const fallback = ltype === 'credit' ? 'Credit Card' : ltype === 'student' ? 'Student Loan' : ltype === 'mortgage' ? 'Mortgage' : 'Auto Loan';
+                          const name = l._name || (acct ? cleanAcctName(acct.name, acct.subtype, acct.type, acct.mask) : fallback);
+                          const minPmt = l.minimum_payment_amount || l.next_monthly_payment;
+                          liabBillEvents.push({
+                            id: `liab-${l.account_id || ltype}-${dueDay}`,
+                            title: name, date: dateStr, type: 'bill',
+                            note: minPmt ? `Min ${fmt(minPmt)}` : 'Payment due',
+                            _auto: true,
+                          });
+                        });
+                        const subBillEvents = [];
+                        if (!isDemoData && activeTxns.length > 0) {
+                          const subGroups = {};
+                          activeTxns.filter(t => t.amount > 0).forEach(t => {
+                            const key = (t.merchant_name || t.name || '').toLowerCase().trim();
+                            if (!key) return;
+                            if (!subGroups[key]) subGroups[key] = { name: t.merchant_name || t.name, txns: [] };
+                            subGroups[key].txns.push(t);
+                          });
+                          Object.values(subGroups).forEach(({ name, txns }) => {
+                            if (txns.length < 2) return;
+                            const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                            const amounts = sorted.map(t => t.amount);
+                            const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+                            if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
+                            const gaps = [];
+                            for (let i = 1; i < sorted.length; i++) gaps.push((new Date(sorted[i].date) - new Date(sorted[i-1].date)) / 86400000);
+                            const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+                            if (gaps.some(g => Math.abs(g - avgGap) > avgGap * 0.5)) return;
+                            if (!((avgGap>=5&&avgGap<=9)||(avgGap>=12&&avgGap<=18)||(avgGap>=26&&avgGap<=40)||(avgGap>=85&&avgGap<=100)||(avgGap>=340&&avgGap<=390))) return;
+                            const last = new Date(sorted[sorted.length-1].date + 'T12:00:00');
+                            const next = new Date(last.getTime() + avgGap * 86400000);
+                            if (next.getFullYear() === yr && next.getMonth() === mo) {
+                              const day = next.getDate();
+                              const dateStr = `${monthStr}-${String(day).padStart(2,'0')}`;
+                              subBillEvents.push({ id: `sub-${name.replace(/\s+/g,'-').toLowerCase()}-${day}`, title: name, date: dateStr, type: 'subscription', note: fmt(avgAmt), _auto: true });
+                            }
+                          });
+                        }
+                        const allCalEvents = (ds) => [...liabBillEvents.filter(e => e.date === ds), ...subBillEvents.filter(e => e.date === ds), ...calendarEvents.filter(e => e.date === ds)];
+                        const saveEvent = () => {
+                          if (!eventForm.title.trim() || !eventForm.date) return;
+                          if (editingEvent) {
+                            setCalendarEvents(calendarEvents.map(e => e.id === editingEvent.id ? { ...e, ...eventForm, title: eventForm.title.trim() } : e));
+                          } else {
+                            setCalendarEvents(prev => [...prev, { id: `cal-${Date.now()}`, ...eventForm, title: eventForm.title.trim() }]);
+                          }
+                          setEventForm({ title: '', date: '', type: 'reminder', note: '' });
+                          setEditingEvent(null); setShowEventForm(false); setSelectedDay(null);
+                        };
+                        return (
+                          <div data-tour="overview-calendar" className="lc" style={{ ...CARD, marginTop: 16, padding: isMobile ? 14 : 24 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                              <div style={{ fontWeight: 600 }}>Calendar</div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setShowLinkCal(true)} style={{ padding: '5px 12px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Link Calendar</button>
+                                <button onClick={() => { setEventForm({ title: '', date: selectedDay || '', type: 'reminder', note: '' }); setEditingEvent(null); setShowEventForm(v => !v); }} style={{ padding: '5px 12px', background: BLUE_BTN, color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Event</button>
+                              </div>
+                            </div>
+                            {showEventForm && (
+                              <div style={{ marginBottom: 16, padding: 14, background: DARK, borderRadius: 9, border: BORDER }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Title</div>
+                                    <input autoFocus value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+                                      placeholder="e.g. Rent Due" onKeyDown={e => e.key === 'Enter' && saveEvent()}
+                                      style={{ width: '100%', padding: '8px 10px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Date</div>
+                                    <input type="date" value={eventForm.date} onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
+                                      style={{ width: '100%', padding: '8px 10px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', boxSizing: 'border-box', colorScheme: 'dark' }} />
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Type</div>
+                                    <select value={eventForm.type} onChange={e => setEventForm(f => ({ ...f, type: e.target.value }))}
+                                      style={{ width: '100%', padding: '8px 10px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none' }}>
+                                      {Object.entries(EVENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                    </select>
+                                  </div>
+                                </div>
+                                <div style={{ marginBottom: 10 }}>
+                                  <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Note (optional)</div>
+                                  <input value={eventForm.note} onChange={e => setEventForm(f => ({ ...f, note: e.target.value }))}
+                                    placeholder="e.g. $1,200 rent"
+                                    style={{ width: '100%', padding: '8px 10px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button onClick={saveEvent} disabled={!eventForm.title.trim() || !eventForm.date}
+                                    style={{ padding: '7px 16px', background: eventForm.title.trim() && eventForm.date ? 'rgba(74,222,128,0.15)' : MUTED, border: eventForm.title.trim() && eventForm.date ? '1px solid rgba(74,222,128,0.35)' : BORDER, borderRadius: 7, color: eventForm.title.trim() && eventForm.date ? GREEN : TEXT3, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                    {editingEvent ? 'Save' : 'Add Event'}
+                                  </button>
+                                  <button onClick={() => { setShowEventForm(false); setEditingEvent(null); setEventForm({ title: '', date: '', type: 'reminder', note: '' }); }}
+                                    style={{ padding: '7px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                                </div>
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                              <button onClick={() => setCalViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                                style={{ background: MUTED, border: BORDER, borderRadius: 6, color: TEXT2, padding: '4px 10px', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>‹</button>
+                              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                <select value={mo} onChange={e => setCalViewDate(new Date(yr, parseInt(e.target.value), 1))}
+                                  style={{ background: MUTED, border: BORDER, borderRadius: 5, color: TEXT, fontSize: 13, fontWeight: 700, padding: '3px 6px', cursor: 'pointer', outline: 'none' }}>
+                                  {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                                    <option key={m} value={i}>{m}</option>
+                                  ))}
+                                </select>
+                                <select value={yr} onChange={e => setCalViewDate(new Date(parseInt(e.target.value), mo, 1))}
+                                  style={{ background: MUTED, border: BORDER, borderRadius: 5, color: TEXT, fontSize: 13, fontWeight: 700, padding: '3px 6px', cursor: 'pointer', outline: 'none' }}>
+                                  {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button onClick={() => setCalViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                                style={{ background: MUTED, border: BORDER, borderRadius: 6, color: TEXT2, padding: '4px 10px', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>›</button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 2, marginBottom: 4 }}>
+                              {['S','M','T','W','T','F','S'].map((d, i) => (
+                                <div key={i} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: TEXT3, paddingBottom: 4 }}>{d}</div>
+                              ))}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 2 }}>
+                              {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
+                              {Array.from({ length: daysInMonth }).map((_, i) => {
+                                const day = i + 1;
+                                const dateStr = `${monthStr}-${String(day).padStart(2, '0')}`;
+                                const dayEvents = allCalEvents(dateStr);
+                                const isToday = dateStr === todayStr;
+                                const isSel = selectedDay === dateStr;
+                                return (
+                                  <div key={day} onClick={() => { setSelectedDay(isSel ? null : dateStr); setEventForm(f => ({ ...f, date: dateStr })); setShowEventForm(true); setEditingEvent(null); }}
+                                    style={{ minHeight: isMobile ? 44 : 56, padding: isMobile ? '3px 2px' : '4px 5px', borderRadius: 7, border: isToday ? `1px solid ${BLUE}` : isSel ? `1px solid ${GREEN}` : `1px solid ${BORDER_C}`, background: isToday ? 'rgba(77,163,255,0.06)' : isSel ? 'rgba(74,222,128,0.04)' : 'transparent', cursor: 'pointer', transition: 'background 0.1s', overflow: 'hidden' }}>
+                                    <div style={{ fontSize: isMobile ? 10 : 11, fontWeight: isToday ? 700 : 400, color: isToday ? BLUE : TEXT2, marginBottom: 2 }}>{day}</div>
+                                    {dayEvents.slice(0, isMobile ? 1 : 2).map(ev => (
+                                      <div key={ev.id} onClick={e => { e.stopPropagation(); if (ev._auto) return; setEditingEvent(ev); setEventForm({ title: ev.title, date: ev.date, type: ev.type, note: ev.note || '' }); setShowEventForm(true); }}
+                                        style={{ fontSize: 8, fontWeight: 600, color: '#fff', background: EVENT_TYPES[ev.type]?.color || BLUE, borderRadius: 3, padding: '1px 3px', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._auto ? 'default' : 'pointer', maxWidth: '100%' }}>
+                                        {ev.title}
+                                      </div>
+                                    ))}
+                                    {dayEvents.length > (isMobile ? 1 : 2) && <div style={{ fontSize: 8, color: TEXT3 }}>+{dayEvents.length - (isMobile ? 1 : 2)}</div>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 12 }}>
+                              {Object.entries(EVENT_TYPES).map(([k, v]) => (
+                                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: v.color, flexShrink: 0 }} />
+                                  <span style={{ fontSize: 10, color: TEXT2, fontWeight: 600 }}>{v.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {(() => {
+                              const upcoming = [...liabBillEvents, ...subBillEvents, ...calendarEvents].filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
+                              if (!upcoming.length) return null;
+                              return (
+                                <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BORDER_C}` }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10 }}>Upcoming</div>
+                                  {upcoming.map(ev => (
+                                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: EVENT_TYPES[ev.type]?.color || BLUE, flexShrink: 0 }} />
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{ev.title}</div>
+                                        {ev.note && <div style={{ fontSize: 11, color: TEXT3 }}>{ev.note}</div>}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: TEXT2, whiteSpace: 'nowrap' }}>{new Date(ev.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                      {!ev._auto && <button onClick={() => setCalendarEvents(prev => prev.filter(e => e.id !== ev.id))}
+                                        style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>×</button>}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        );
+                      })();
                       case 'market-alerts': return (
                         <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
                           <div style={{ fontWeight: 600, marginBottom: 12 }}>Market Alerts</div>
@@ -7704,20 +8252,25 @@ export default function Dashboard() {
                   };
                   return (
                     <>
-                      {_newFulls.map(key => (
-                        <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                          {renderNewWidget(key)}
-                        </DragSection>
-                      ))}
-                      {_nwRows.map((row, ri) => (
-                        <div key={`nrow-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : row.length === 2 ? '1fr 1fr' : '1fr', gap: 16, alignItems: 'stretch' }}>
-                          {row.map(key => (
+                      {_nonStatRows.map((row, ri) => {
+                        if (row.type === 'full') {
+                          const key = row.keys[0];
+                          return (
                             <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                              {renderNewWidget(key)}
+                              {renderWidget(key)}
                             </DragSection>
-                          ))}
-                        </div>
-                      ))}
+                          );
+                        }
+                        return (
+                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'stretch' }}>
+                            {row.keys.map(key => (
+                              <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                                {renderWidget(key)}
+                              </DragSection>
+                            ))}
+                          </div>
+                        );
+                      })}
                     </>
                   );
                 })()}
@@ -7725,42 +8278,6 @@ export default function Dashboard() {
                 </div>
                 )}
 
-              {/* Widget Picker Modal */}
-              {showWidgetPicker && (
-                <>
-                  <div onClick={() => setShowWidgetPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} />
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 9991, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, pointerEvents: 'none' }}>
-                    <div onClick={e => e.stopPropagation()} style={{ background: '#161b2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 580, maxHeight: '80vh', overflowY: 'auto', pointerEvents: 'auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <div style={{ fontSize: 17, fontWeight: 700, color: TEXT }}>Customize Overview</div>
-                        <button onClick={() => setShowWidgetPicker(false)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 2 }}>×</button>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20, lineHeight: 1.5 }}>Toggle sections on or off. Drag cards on the overview to reorder them.</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
-                        {OV_WIDGETS.filter(w => !w.pinned).map(w => {
-                          const on = ovEnabled.has(w.key);
-                          return (
-                            <button key={w.key} onClick={() => {
-                              const next = new Set(ovEnabled);
-                              if (next.has(w.key)) next.delete(w.key); else next.add(w.key);
-                              try { localStorage.setItem(`pl_ov_enabled_${user?.id || 'guest'}`, JSON.stringify([...next])); } catch {}
-                              setOvEnabled(next);
-                            }} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: on ? 'rgba(77,163,255,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${on ? 'rgba(77,163,255,0.3)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}>
-                              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? '#0066f5' : 'rgba(255,255,255,0.15)'}`, background: on ? '#0066f5' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {on && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
-                              </div>
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: on ? '#f1f5f9' : '#94a3b8', marginBottom: 2 }}>{w.label}</div>
-                                <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.4 }}>{w.desc}</div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
 
               </div>
               );
@@ -10372,14 +10889,22 @@ export default function Dashboard() {
                       <h1 data-tour="scholarship-header" style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>Scholarship Health</h1>
                       <div style={{ fontSize: 13, color: TEXT2 }}>Georgia HOPE / Zell Miller · University of Georgia · GSFC Rules</div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 3 }}>Projected HOPE GPA</div>
-                      <div style={{ fontSize: 44, fontWeight: 800, fontFamily: 'monospace', color: statusColor, lineHeight: 1 }}>{projGPA.toFixed(2)}</div>
-                    </div>
+                    {schHopeGPA && (
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 3 }}>Projected HOPE GPA</div>
+                        <div style={{ fontSize: 44, fontWeight: 800, fontFamily: 'monospace', color: statusColor, lineHeight: 1 }}>{projGPA.toFixed(2)}</div>
+                      </div>
+                    )}
                   </div>
 
+                  {!schHopeGPA && (
+                    <div style={{ background: 'rgba(77,163,255,0.06)', border: '1px solid rgba(77,163,255,0.2)', borderRadius: 10, padding: '14px 18px', marginBottom: 20, fontSize: 13, color: '#94a3b8', lineHeight: 1.6 }}>
+                      Enter your Current HOPE GPA below to see your scholarship status, tuition value at risk, and projections.
+                    </div>
+                  )}
+
                   {/* ── Status Banner ─────────────────────────────── */}
-                  <div data-tour="scholarship-status" style={{ background: statusBg, border: `1px solid ${statusBorder}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {schHopeGPA && <div data-tour="scholarship-status" style={{ background: statusBg, border: `1px solid ${statusBorder}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
                       <span style={{ fontWeight: 700, fontSize: 14, color: statusColor }}>{statusLabel}</span>
@@ -10390,10 +10915,10 @@ export default function Dashboard() {
                         : <>GPA must reach 3.0 to restore coverage — currently {Math.abs(pointsAboveCliff).toFixed(2)} pts below</>
                       }
                     </div>
-                  </div>
+                  </div>}
 
                   {/* ── Financial Stats ───────────────────────────── */}
-                  <div data-tour="scholarship-stats" style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 20 }}>
+                  {schHopeGPA && <div data-tour="scholarship-stats" style={{ display: 'grid', gridTemplateColumns: g3, gap: 16, marginBottom: 20 }}>
                     {[
                       {
                         label: 'This Semester Coverage',
@@ -10420,10 +10945,10 @@ export default function Dashboard() {
                         <div style={{ fontSize: 11, color: TEXT3, marginTop: 4 }}>{sub}</div>
                       </div>
                     ))}
-                  </div>
+                  </div>}
 
                   {/* ── Checkpoint Progress ───────────────────────── */}
-                  <div className="lc" style={{ ...CARD, marginBottom: 20 }}>
+                  {schHopeGPA && <div className="lc" style={{ ...CARD, marginBottom: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                       <div style={{ fontWeight: 600 }}>GSFC Audit Checkpoints</div>
                       <div style={{ fontSize: 12, color: TEXT2 }}>{totalHrs.toFixed(0)} attempted hrs · {nextCP ? `${hoursToCP.toFixed(0)} hrs until next audit` : 'All checkpoints cleared'}</div>
@@ -10457,7 +10982,7 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </div>}
 
                   {/* ── Input Panel ───────────────────────────────── */}
                   <div style={{ display: 'grid', gridTemplateColumns: g2, gap: 16, marginBottom: 20 }}>
@@ -20273,6 +20798,42 @@ export default function Dashboard() {
           <span style={{ fontSize: 18 }}>✅</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#4ade80' }}>{toast}</span>
         </div>
+      )}
+
+      {showWidgetPicker && (
+        <>
+          <div onClick={() => setShowWidgetPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9991, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, pointerEvents: 'none' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#161b2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 580, maxHeight: '80vh', overflowY: 'auto', pointerEvents: 'auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9' }}>Customize Overview</div>
+                <button onClick={() => setShowWidgetPicker(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 2 }}>×</button>
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20, lineHeight: 1.5 }}>Toggle sections on or off. Drag cards on the overview to reorder them.</div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                {OV_WIDGETS.filter(w => !w.pinned).map(w => {
+                  const on = ovEnabled.has(w.key);
+                  return (
+                    <button key={w.key} onClick={() => {
+                      const next = new Set(ovEnabled);
+                      if (next.has(w.key)) next.delete(w.key); else next.add(w.key);
+                      try { localStorage.setItem(`pl_ov_enabled_${user?.id || 'guest'}`, JSON.stringify([...next])); } catch {}
+                      setOvEnabled(next);
+                    }} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: on ? 'rgba(77,163,255,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${on ? 'rgba(77,163,255,0.3)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}>
+                      <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? '#0066f5' : 'rgba(255,255,255,0.15)'}`, background: on ? '#0066f5' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {on && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: on ? '#f1f5f9' : '#94a3b8', marginBottom: 2 }}>{w.label}</div>
+                        <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.4 }}>{w.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {showConnectModal && (

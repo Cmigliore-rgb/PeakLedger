@@ -287,6 +287,17 @@ try {
 
 try { db.exec(`ALTER TABLE users ADD COLUMN promo_code_redeemed TEXT`); } catch {}
 
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS txn_category_overrides (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      transaction_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      PRIMARY KEY (user_id, transaction_id)
+    )
+  `);
+} catch {}
+
 // Auto-verify admin and professor accounts
 db.prepare("UPDATE users SET email_verified = 1 WHERE role IN ('admin', 'professor') AND email_verified = 0").run();
 // Verify test account

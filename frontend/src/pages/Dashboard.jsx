@@ -8820,7 +8820,7 @@ export default function Dashboard() {
                                   const over      = limit && b.total > limit;
                                   const atRisk    = limit && pct >= 90 && !over;
                                   const warn      = limit && pct >= 75 && !atRisk && !over;
-                                  const barColor  = (over || atRisk) ? RED : warn ? '#BA7517' : BLUE_BTN;
+                                  const barColor  = (over || atRisk) ? RED : warn ? '#F59E0B' : BLUE_BTN;
                                   const isEditing = editingLimit === b.category;
                                   const saveDemoLimit = (val) => {
                                     const v = parseFloat(val);
@@ -8874,7 +8874,7 @@ export default function Dashboard() {
                                 const over     = limit && b.total > limit;
                                 const atRisk   = limit && pct >= 90 && !over;
                                 const warn     = limit && pct >= 75 && !atRisk && !over;
-                                const barColor = (over || atRisk) ? RED : warn ? '#BA7517' : BLUE_BTN;
+                                const barColor = (over || atRisk) ? RED : warn ? '#F59E0B' : BLUE_BTN;
                                 const isEditing = editingLimit === b.category;
                                 return (
                                   <div key={i} style={{ marginBottom: 20 }}>

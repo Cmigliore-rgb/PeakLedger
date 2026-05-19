@@ -4562,7 +4562,7 @@ export default function Dashboard() {
   const sbData = sandboxDataset ? (SANDBOX_DATA[sandboxDataset] || {}) : {};
   const sbBudget = sbData.transactions ? (() => {
     const byCategory = {};
-    sbData.transactions.filter(t => t.amount > 0).forEach(t => {
+    sbData.transactions.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => {
       const cat = resolveCategory(t);
       byCategory[cat] = (byCategory[cat] || 0) + t.amount;
     });
@@ -4574,7 +4574,11 @@ export default function Dashboard() {
   const activeHoldings       = sbData.holdings     || holdings;
   const activeTxns           = sbData.transactions || transactions;
   const activeBudget         = sbBudget            || budget;
-  const activeMonthlySpend   = activeBudget.reduce((s, b) => s + b.total, 0);
+  const _spendNow = new Date();
+  const _spendMonthStart = new Date(_spendNow.getFullYear(), _spendNow.getMonth(), 1);
+  const activeMonthlySpend = activeTxns
+    .filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= _spendMonthStart && new Date(t.date) <= _spendNow)
+    .reduce((s, t) => s + t.amount, 0);
   const activeTotalPortfolio = activeHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
 
   const fetchPortfolioAnalysis = useCallback(async (holdings, period) => {
@@ -6772,7 +6776,7 @@ export default function Dashboard() {
                     ({ monthIncome, monthSpending, saved, rate } = DEMO);
                   } else {
                     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                    const monthTxns = transactions.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
+                    const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
                     monthIncome   = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
                     monthSpending = monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
                     saved = monthIncome - monthSpending;

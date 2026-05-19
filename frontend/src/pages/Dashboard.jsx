@@ -6793,8 +6793,13 @@ export default function Dashboard() {
                       );
                     }
                     const totalBudgeted = limitEntries.reduce((s, [, v]) => s + v, 0);
-                    freeToSpend = totalBudgeted - activeMonthlySpend;
-                    subtitle = `${fmt(activeMonthlySpend)} spent of ${fmt(totalBudgeted)} budgeted`;
+                    const monthStart2 = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const limitedCatSpend = limitEntries.reduce((s, [cat, ]) => {
+                      const catTotal = activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= monthStart2 && new Date(t.date) <= now && resolveCategory(t) === cat).reduce((a, t) => a + t.amount, 0);
+                      return s + catTotal;
+                    }, 0);
+                    freeToSpend = totalBudgeted - limitedCatSpend;
+                    subtitle = `${fmt(limitedCatSpend)} spent of ${fmt(totalBudgeted)} budgeted`;
                   }
                   const isPositive = freeToSpend >= 0;
                   const color = isPositive ? GREEN : RED;

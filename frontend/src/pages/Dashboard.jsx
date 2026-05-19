@@ -6639,7 +6639,7 @@ export default function Dashboard() {
               const _h = new Date().getHours();
               const _g = _h < 12 ? 'Good morning' : _h < 17 ? 'Good afternoon' : 'Good evening';
               const _n = user?.name?.split(' ')[0] || 'there';
-              const _OV_DEF = ['stats', 'free-to-spend', 'savings-rate', 'chart', 'health', 'goals', 'txns', 'calendar'];
+              const _OV_DEF = ['stats', 'free-to-spend', 'savings-rate', 'chart', 'goals', 'txns', 'calendar'];
               const _ovOrder = getOrder('overview', _OV_DEF);
               const _ovReorder = handleReorder('overview', _OV_DEF);
               const _ovCustom = !!layoutOrder['overview'];
@@ -6916,74 +6916,32 @@ export default function Dashboard() {
                   const TARGET = 20;
                   return (
                     <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 24 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: isDemoData ? 8 : 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <div style={{ fontSize: 13, fontWeight: 700 }}>Monthly Savings Rate</div>
                           <button onClick={() => openTourAt(2)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
                         </div>
-                        <div style={{ fontSize: 11, color: TEXT2 }}>{now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ fontSize: 24, fontWeight: 800, color: rateColor, letterSpacing: '-1px' }}>{rate !== null ? `${rate}%` : '—'}</span>
+                          <span style={{ fontSize: 11, color: TEXT2 }}>{now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                        </div>
                       </div>
                       {isDemoData && (
-                        <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 16, display: 'inline-block' }}>
+                        <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '5px 10px', marginBottom: 10, display: 'inline-block' }}>
                           Demo data. Connect an account to see your real savings rate.
                         </div>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 16, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-                        <div style={{ flexShrink: 0 }}>
-                          <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Rate</div>
-                          <div style={{ fontSize: isMobile ? 30 : 38, fontWeight: 800, color: rateColor, letterSpacing: '-2px', lineHeight: 1 }}>{rate !== null ? `${rate}%` : '—'}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: isMobile ? 8 : 10, paddingTop: 2 }}>
-                          {[
-                            { label: 'Income',   value: fmt(monthIncome),                                              color: GREEN },
-                            { label: 'Spending', value: fmt(monthSpending),                                            color: RED   },
-                            { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`,         color: saved >= 0 ? GREEN : RED },
-                          ].map(({ label, value, color }) => (
-                            <div key={label} style={{ minWidth: 0, overflow: 'hidden' }}>
-                              <div style={{ fontSize: 10, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{label}</div>
-                              <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-                            </div>
-                          ))}
-                        </div>
+                      <div style={{ fontSize: 12, color: TEXT2, marginBottom: 10 }}>
+                        {fmt(monthIncome)} income · {fmt(monthSpending)} spent · {saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`} saved
                       </div>
                       <div style={{ background: MUTED, borderRadius: 4, height: 6, overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(Math.max(rate ?? 0, 0), 100)}%`, height: '100%', background: rateColor, borderRadius: 4, transition: 'width 0.6s ease' }} />
                       </div>
-                      <div style={{ position: 'relative', marginTop: 6, fontSize: 11, color: TEXT3, height: 16 }}>
+                      <div style={{ position: 'relative', marginTop: 5, fontSize: 11, color: TEXT3, height: 14 }}>
                         <span style={{ position: 'absolute', left: 0 }}>0%</span>
                         <span style={{ position: 'absolute', left: `${TARGET}%`, transform: 'translateX(-50%)', color: rate !== null && rate >= TARGET ? GREEN : TEXT3 }}>{TARGET}% target</span>
                         <span style={{ position: 'absolute', right: 0 }}>100%</span>
                       </div>
-                      {isDemoData ? (
-                        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${GREEN}12`, color: GREEN, fontWeight: 500 }}>Saving 25% of income this month: on target</div>
-                          <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${GREEN}12`, color: GREEN, fontWeight: 500 }}>Emergency fund covers 2.1 months of expenses</div>
-                          <div style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${RED}12`, color: RED, fontWeight: 500 }}>Food & Dining is 18% above your 3-month average</div>
-                        </div>
-                      ) : (() => {
-                        const _now = new Date();
-                        const daysElapsed = _now.getDate() || 1;
-                        const daysInMonth = new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate();
-                        const projectedMonthly = activeMonthlySpend / daysElapsed * daysInMonth;
-                        const totalBudgeted = Object.values(budgetLimits).reduce((s, v) => s + v, 0);
-                        const msgs = [];
-                        if (rate !== null && rate < 0) {
-                          msgs.push({ color: RED, text: `Spending exceeds income by ${fmt(Math.abs(saved))} this month` });
-                        }
-                        if (totalBudgeted > 0 && projectedMonthly > totalBudgeted * 1.05) {
-                          msgs.push({ color: RED, text: `Spending pace: on track to exceed budget by ${fmt(Math.round(projectedMonthly - totalBudgeted))}` });
-                        } else if (totalBudgeted > 0 && projectedMonthly <= totalBudgeted * 0.85) {
-                          msgs.push({ color: GREEN, text: `Pace: ${fmt(Math.round(totalBudgeted - projectedMonthly))} under budget at current rate` });
-                        }
-                        if (msgs.length === 0) return null;
-                        return (
-                          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            {msgs.map((m, i) => (
-                              <div key={i} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, background: `${m.color}12`, color: m.color, fontWeight: 500 }}>{m.text}</div>
-                            ))}
-                          </div>
-                        );
-                      })()}
                     </div>
                   );
                 })()}
@@ -7003,93 +6961,6 @@ export default function Dashboard() {
                   <NetWorthChart snapshots={isDemoData ? DEMO_SNAPSHOTS : snapshots} />
                 </div>
 
-                </DragSection>
-                <DragSection id="health" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                <div data-tour="overview-baseline" style={{ ...CARD, marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>Cash Flow Baseline</div>
-                      <button onClick={() => openTourAt(4)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
-                    </div>
-                    {baselineData?.baseline && (
-                      <span style={{ fontSize: 11, color: TEXT3 }}>
-                        Based on {baselineData.baseline.monthsOfData} mo of history · adjusts for seasonality
-                      </span>
-                    )}
-                  </div>
-
-                  {(() => {
-                    const display = baselineData?.baseline ? baselineData : (isDemoData ? DEMO_BASELINE : null);
-                    if (!display) return (
-                      <div style={{ padding: '32px 0', textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, color: TEXT2 }}>Connect a bank account to establish your personal baseline.</div>
-                      </div>
-                    );
-                    return (
-                      <>
-                        {display.isDemo && (
-                          <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>
-                            Demo data. Connect an account to see your real baseline.
-                          </div>
-                        )}
-                        <BaselineChart
-                          months={display.months}
-                          baseline={display.baseline}
-                          currentMTD={display.currentMTD}
-                          status={display.status}
-                          onRefresh={refreshBaseline}
-                          refreshing={baselineRefreshing}
-                          isDemo={!!display.isDemo}
-                        />
-                        {display.currentMTD && (() => {
-                          const { projectedNet, baseline, pctOfMonth } = display.currentMTD;
-                          const gap = Math.abs(projectedNet - baseline);
-                          const isRed  = display.status === 'red';
-                          const isWarn = display.status === 'warning';
-                          const isGood = display.status === 'good';
-                          const color  = isRed ? RED : isWarn ? YELLOW : GREEN;
-                          let headline, body, cta, ctaAction;
-                          if (isRed) {
-                            headline = `Spending is running above your baseline`;
-                            body = `You're ${pctOfMonth}% through the month. At this pace your net will be ${fmt(projectedNet)}, about ${fmt(gap)} below your typical ${fmt(baseline)}. Check Expenses to see what categories are over.`;
-                            cta = 'Review Expenses';
-                            ctaAction = () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); };
-                          } else if (isWarn) {
-                            headline = `You're tracking slightly below your baseline`;
-                            body = `Projected net of ${fmt(projectedNet)} vs your typical ${fmt(baseline)} — ${fmt(gap)} gap with ${100 - pctOfMonth}% of the month left. Small adjustments now can close it.`;
-                            cta = 'Check Expenses';
-                            ctaAction = () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); };
-                          } else {
-                            headline = `You're on track this month`;
-                            body = `Projected net of ${fmt(projectedNet)}, about ${fmt(gap)} ahead of your typical ${fmt(baseline)}. Consider putting the extra toward a goal.`;
-                            cta = 'See Goals';
-                            ctaAction = () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('goals'); };
-                          }
-                          return (
-                            <div style={{ marginTop: 16, paddingTop: 16, borderTop: BORDER }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                                <div>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 5 }}>{headline}</div>
-                                  <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.5 }}>{body}</div>
-                                </div>
-                                <button onClick={ctaAction} style={{ flexShrink: 0, padding: '6px 14px', background: 'transparent', border: `1px solid ${color}50`, borderRadius: 8, color, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                                  {cta} →
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                        <AIInsightCard
-                          isDemoData={!!display.isDemo}
-                          demoKey="cashflow"
-                          onGetAdvice={canSeeAI ? () => getAdvice('cashflow') : undefined}
-                          loading={adviceState.cashflow?.loading}
-                          text={adviceState.cashflow?.text}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
                 </DragSection>
                 <DragSection id="goals" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
@@ -7215,7 +7086,7 @@ export default function Dashboard() {
                         <div style={{ fontSize: 12, color: TEXT3 }}>Connect a bank account to see your spending here.</div>
                       </div>
                     ) : (
-                      <div className="card-scroll" style={{ maxHeight: 260 }}>
+                      <div className="card-scroll" style={{ maxHeight: 180 }}>
                         {(() => {
                           const todayStr = new Date().toISOString().slice(0, 10);
                           const yestStr  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -7257,7 +7128,7 @@ export default function Dashboard() {
                   </div>
                   <div className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden' }}>
                     <div style={{ fontWeight: 600, marginBottom: 12 }}>Market Alerts</div>
-                    <div className="card-scroll" style={{ maxHeight: 260 }}>
+                    <div className="card-scroll" style={{ maxHeight: 180 }}>
                       {articles.map((a, i, arr) => (
                         <div key={i} style={{ padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${BORDER_C}` : 'none' }}>
                           <a href={a.url !== '#' ? a.url : undefined} target={a.url !== '#' ? '_blank' : undefined} rel="noreferrer" style={{ color: TEXT, textDecoration: 'none', fontSize: 13, fontWeight: 500, lineHeight: 1.4, display: 'block' }}>{a.headline}</a>
@@ -8182,6 +8053,69 @@ export default function Dashboard() {
                 </div>
                 {SandboxBanner}
 
+                {/* Cash Flow Baseline */}
+                {!selectedCategory && (() => {
+                  const display = baselineData?.baseline ? baselineData : (isDemoData ? DEMO_BASELINE : null);
+                  if (!display) return null;
+                  return (
+                    <div data-tour="overview-baseline" style={{ ...CARD, marginBottom: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>Cash Flow Baseline</div>
+                          <button onClick={() => openTourAt(4)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
+                        </div>
+                        {baselineData?.baseline && (
+                          <span style={{ fontSize: 11, color: TEXT3 }}>Based on {baselineData.baseline.monthsOfData} mo of history</span>
+                        )}
+                      </div>
+                      {display.isDemo && (
+                        <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>
+                          Demo data. Connect an account to see your real baseline.
+                        </div>
+                      )}
+                      <BaselineChart
+                        months={display.months}
+                        baseline={display.baseline}
+                        currentMTD={display.currentMTD}
+                        status={display.status}
+                        onRefresh={refreshBaseline}
+                        refreshing={baselineRefreshing}
+                        isDemo={!!display.isDemo}
+                      />
+                      {display.currentMTD && (() => {
+                        const { projectedNet, baseline, pctOfMonth } = display.currentMTD;
+                        const gap = Math.abs(projectedNet - baseline);
+                        const isRed  = display.status === 'red';
+                        const isWarn = display.status === 'warning';
+                        const color  = isRed ? RED : isWarn ? YELLOW : GREEN;
+                        let headline, body, cta, ctaAction;
+                        if (isRed) {
+                          headline = 'Spending is running above your baseline';
+                          body = `You're ${pctOfMonth}% through the month. At this pace your net will be ${fmt(projectedNet)}, about ${fmt(gap)} below your typical ${fmt(baseline)}.`;
+                          cta = 'Review Expenses'; ctaAction = () => setBudgetTab('spending');
+                        } else if (isWarn) {
+                          headline = 'Tracking slightly below your baseline';
+                          body = `Projected net of ${fmt(projectedNet)} vs your typical ${fmt(baseline)} — ${fmt(gap)} gap with ${100 - pctOfMonth}% of the month left.`;
+                          cta = 'Check Expenses'; ctaAction = () => setBudgetTab('spending');
+                        } else {
+                          headline = 'On track this month';
+                          body = `Projected net of ${fmt(projectedNet)}, about ${fmt(gap)} ahead of your typical ${fmt(baseline)}.`;
+                          cta = 'See Goals'; ctaAction = () => setBudgetTab('goals');
+                        }
+                        return (
+                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: BORDER, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 4 }}>{headline}</div>
+                              <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.5 }}>{body}</div>
+                            </div>
+                            <button onClick={ctaAction} style={{ flexShrink: 0, padding: '6px 14px', background: 'transparent', border: `1px solid ${color}50`, borderRadius: 8, color, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{cta} →</button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                })()}
+
                 {/* Subtabs */}
                 {!selectedCategory && (
                   <div style={{ marginBottom: 24, borderBottom: BORDER, paddingBottom: 14, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
@@ -8319,8 +8253,10 @@ export default function Dashboard() {
                           const start = new Date(d.getFullYear(), d.getMonth(), 1);
                           const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
                           const allTxns = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end; });
-                          expByMonth.push(allTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0));
-                          incByMonth.push(allTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0));
+                          const _hasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                          const INCOME_CATS_SR2 = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
+                          expByMonth.push(allTxns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0));
+                          incByMonth.push(allTxns.filter(t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_SR2].some(k => cat.includes(k)); }).reduce((s, t) => s + Math.abs(t.amount), 0));
                         }
                         const MOCK_EXP = [1180, 1540, 980, 1320, 1110, 1500];
                         const MOCK_INC = [1420, 1850, 1200, 1550, 1350, 1800];
@@ -8445,6 +8381,8 @@ export default function Dashboard() {
 
                 {budgetTab === 'spending' && (() => {
                   const now = new Date();
+                  const hasCreditAccts = activeAccounts.some(a => a.type === 'credit');
+                  const isExcludedSpend = t => isTransfer(t) || (hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT');
                   const expMonths = [];
                   for (let i = 5; i >= 0; i--) {
                     const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -8452,7 +8390,7 @@ export default function Dashboard() {
                     const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
                     const label     = d.toLocaleDateString('en-US', { month: 'short' });
                     const fullLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    const txns  = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0 && !isTransfer(t); });
+                    const txns  = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0 && !isExcludedSpend(t); });
                     const total = txns.reduce((s, t) => s + t.amount, 0);
                     const catMap = {};
                     txns.forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
@@ -8499,8 +8437,6 @@ export default function Dashboard() {
                   const selExpIdx = 5 - selectedExpenseMonth;
                   const selExp    = display[selExpIdx] || display[5];
 
-                  const hasCreditAccts = activeAccounts.some(a => a.type === 'credit');
-                  const isExcludedSpend = t => isTransfer(t) || (hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT');
                   let displayBudget;
                   if (!hasRealExp) {
                     displayBudget = [];
@@ -9069,7 +9005,7 @@ export default function Dashboard() {
                   const lastIncome = income(lastTxns),  lastExpenses = expenses(lastTxns);
                   const thisNet = thisIncome - thisExpenses, lastNet = lastIncome - lastExpenses;
                   const cashFlowMax = Math.max(thisIncome, thisExpenses, lastIncome, lastExpenses, 1);
-                  const catSpend = txns => { const m = {}; txns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => { const c = resolveCategory(t); m[c] = (m[c] || 0) + t.amount; }); return m; };
+                  const catSpend = txns => { const m = {}; txns.filter(t => t.amount > 0 && !isTransfer(t) && !(hasCreditAccounts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT')).forEach(t => { const c = resolveCategory(t); m[c] = (m[c] || 0) + t.amount; }); return m; };
                   const thisSpend = catSpend(thisTxns), lastSpend = catSpend(lastTxns);
                   const allCats = [...new Set([...Object.keys(thisSpend), ...Object.keys(lastSpend)])].sort((a, b) => (thisSpend[b] || 0) - (thisSpend[a] || 0));
                   const thisMonthLabel = now.toLocaleDateString('en-US', { month: 'long' });

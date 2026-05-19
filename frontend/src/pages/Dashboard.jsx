@@ -729,7 +729,7 @@ function NetWorthChart({ snapshots }) {
     );
   }
 
-  const W = 600, H = 140, PAD = { top: 24, right: 16, bottom: 28, left: 64 };
+  const W = 600, H = 140, PAD = { top: 24, right: 16, bottom: 28, left: 76 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
@@ -798,7 +798,7 @@ function NetWorthChart({ snapshots }) {
             <g key={t}>
               <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke={BORDER_C} strokeWidth={1} />
               <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={10} fill={TEXT3}>
-                ${(v / 1000).toFixed(0)}k
+                {v < 0 ? `-$${(Math.abs(v) / 1000).toFixed(0)}k` : `$${(v / 1000).toFixed(0)}k`}
               </text>
             </g>
           );
@@ -4225,7 +4225,12 @@ export default function Dashboard() {
       ].reduce((s, l) => s + (l.balances?.current || 0), 0);
       const nw = cash + portfolio - totalLiab;
       if (allAccounts.length > 0) {
+        const today = new Date().toISOString().slice(0, 10);
         api.post('/snapshots', { netWorth: nw }).catch(() => {});
+        setSnapshots(prev => {
+          const without = (prev || []).filter(s => s.date !== today);
+          return [...without, { date: today, value: nw }].sort((a, b) => a.date.localeCompare(b.date));
+        });
       }
     } finally {
       setLoading(false);
@@ -6768,12 +6773,9 @@ export default function Dashboard() {
                     freeToSpend = 480;
                     subtitle = 'Remaining this month based on budget limits';
                   } else {
-                    const totalBudgeted = Object.values(budgetLimits).reduce((s, v) => s + v, 0);
-                    if (totalBudgeted > 0) {
-                      freeToSpend = totalBudgeted - activeMonthlySpend;
-                      subtitle = `${fmt(activeMonthlySpend)} spent of ${fmt(totalBudgeted)} budgeted`;
-                    } else {
-                      // No budget limits set: always show spending-only card with CTA
+                    const limitEntries = Object.entries(budgetLimits);
+                    if (limitEntries.length === 0) {
+                      // No budget limits set: show spending-only card with CTA
                       return (
                         <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -6790,25 +6792,44 @@ export default function Dashboard() {
                         </div>
                       );
                     }
+                    // Per-category remaining: sum of max(0, limit - spent) so over-budget
+                    // categories contribute $0 and setting any limit only ever increases this number
+                    const catSpend = {};
+                    activeTxns.filter(t => {
+                      const d = new Date(t.date);
+                      const ms = new Date(now.getFullYear(), now.getMonth(), 1);
+                      return t.amount > 0 && !isTransfer(t) && d >= ms && d <= now;
+                    }).forEach(t => { const c = resolveCategory(t); catSpend[c] = (catSpend[c] || 0) + t.amount; });
+                    freeToSpend = limitEntries.reduce((sum, [cat, lim]) => sum + Math.max(0, lim - (catSpend[cat] || 0)), 0);
+                    const overCount = limitEntries.filter(([cat, lim]) => (catSpend[cat] || 0) > lim).length;
+                    subtitle = overCount > 0
+                      ? `${overCount} categor${overCount === 1 ? 'y' : 'ies'} over limit this month`
+                      : `${limitEntries.length} categor${limitEntries.length === 1 ? 'y' : 'ies'} with limits set`;
                   }
-                  const isPositive = freeToSpend >= 0;
-                  const color = isPositive ? GREEN : RED;
-                  const label = Object.values(budgetLimits).reduce((s, v) => s + v, 0) > 0 ? 'Free to Spend' : 'Cash Flow';
+                  const color = GREEN;
+                  const overCount2 = !isDemoData ? Object.entries(budgetLimits).filter(([cat, lim]) => {
+                    const d = new Date(); const ms = new Date(d.getFullYear(), d.getMonth(), 1);
+                    const spent = activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= ms && resolveCategory(t) === cat).reduce((s, t) => s + t.amount, 0);
+                    return spent > lim;
+                  }).length : 0;
                   return (
-                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
+                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: `${GREEN}50` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
                           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
-                            {isPositive ? '' : '−'}{fmt(Math.abs(freeToSpend))}
+                            {fmt(freeToSpend)}
                           </div>
                           <div style={{ fontSize: 12, color: TEXT2 }}>{subtitle}</div>
                         </div>
                         <div style={{ fontSize: 11, color: TEXT3, textAlign: 'right', lineHeight: 1.5 }}>
-                          <div style={{ fontSize: 22, marginBottom: 2 }}>{isPositive ? '✓' : '⚠'}</div>
-                          <div style={{ color }}>{isPositive ? 'On track' : 'Over budget'}</div>
+                          <div style={{ fontSize: 22, marginBottom: 2 }}>✓</div>
+                          <div style={{ color: GREEN }}>Remaining</div>
                         </div>
                       </div>
+                      {overCount2 > 0 && (
+                        <div style={{ marginTop: 10, fontSize: 12, color: RED }}>⚠ {overCount2} categor{overCount2 === 1 ? 'y' : 'ies'} over limit. <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }} style={{ background: 'none', border: 'none', color: BLUE, fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>Review</button></div>
+                      )}
                     </div>
                   );
                 })()}
@@ -8738,9 +8759,10 @@ export default function Dashboard() {
                                 return cats.map((b, i) => {
                                   const limit     = demoBudgetLimits[b.category];
                                   const pct       = limit ? Math.min((b.total / limit) * 100, 110) : null;
-                                  const over      = limit && pct >= 90;
-                                  const warn      = limit && pct >= 75 && !over;
-                                  const barColor  = over ? RED : warn ? '#BA7517' : BLUE_BTN;
+                                  const over      = limit && b.total > limit;
+                                  const atRisk    = limit && pct >= 90 && !over;
+                                  const warn      = limit && pct >= 75 && !atRisk && !over;
+                                  const barColor  = (over || atRisk) ? RED : warn ? '#BA7517' : BLUE_BTN;
                                   const isEditing = editingLimit === b.category;
                                   const saveDemoLimit = (val) => {
                                     const v = parseFloat(val);
@@ -8791,9 +8813,10 @@ export default function Dashboard() {
                               })() : displayBudget.map((b, i) => {
                                 const limit    = budgetLimits[b.category];
                                 const pct      = limit ? Math.min((b.total / limit) * 100, 110) : null;
-                                const over     = limit && pct >= 90;
-                                const warn     = limit && pct >= 75 && !over;
-                                const barColor = over ? RED : warn ? '#BA7517' : BLUE_BTN;
+                                const over     = limit && b.total > limit;
+                                const atRisk   = limit && pct >= 90 && !over;
+                                const warn     = limit && pct >= 75 && !atRisk && !over;
+                                const barColor = (over || atRisk) ? RED : warn ? '#BA7517' : BLUE_BTN;
                                 const isEditing = editingLimit === b.category;
                                 return (
                                   <div key={i} style={{ marginBottom: 20 }}>

@@ -455,6 +455,8 @@ const LOGO_OVERRIDES = {
   'capitalone':   'https://www.capitalone.com/favicon.ico',
   'peakledger':   '/logo.png',
   'peak ledger':  '/logo.png',
+  'uga':          'https://www.uga.edu/favicon.ico',
+  'university of georgia': 'https://www.uga.edu/favicon.ico',
 };
 
 function logoUrls(name, ticker, logoUrl) {
@@ -1397,11 +1399,13 @@ function _resolveCategory(txn) {
 // Returns true for internal account transfers (Plaid TRANSFER_IN / TRANSFER_OUT).
 // These should be excluded from income and expense totals to avoid double-counting.
 function isTransfer(txn) {
-  const primary = (txn.personal_finance_category?.primary || txn.category?.[0] || '').toUpperCase();
-  if (primary === 'TRANSFER_IN' || primary === 'TRANSFER_OUT') return true;
-  // Fallback: name-based heuristic for banks that don't use the personal_finance_category field
+  const newCat = (txn.personal_finance_category?.primary || '').toUpperCase();
+  if (newCat === 'TRANSFER_IN' || newCat === 'TRANSFER_OUT') return true;
+  // Legacy Plaid taxonomy: category[0] === 'Transfer' covers inter-account moves
+  const legacyCat = (txn.category?.[0] || '').toLowerCase();
+  if (legacyCat === 'transfer') return true;
   const name = (txn.merchant_name || txn.name || '').toLowerCase();
-  return /^(transfer (from|to|between)|online transfer|account transfer|zelle transfer)/i.test(name);
+  return /\b(online transfer|account transfer|zelle transfer|transfer (from|to|between))/i.test(name);
 }
 
 const ACCOUNT_TYPE_LABEL = {
@@ -8066,6 +8070,7 @@ export default function Dashboard() {
                   const INCOME_CATS = new Set(['income', 'transfer in', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'rent', 'financial aid']);
                   const isIncomeTxn = t => {
                     if (t.amount >= 0) return false;
+                    if (isTransfer(t)) return false;
                     const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
                     return [...INCOME_CATS].some(k => cat.includes(k));
                   };
@@ -10529,13 +10534,13 @@ export default function Dashboard() {
                           <div style={{ fontSize:13, fontWeight:700, color:TEXT, marginBottom:12 }}>{manualHoldingEdit ? 'Edit Holding' : 'Add Manual Holding'}</div>
                           <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Ticker <span style={{ color:TEXT3, fontWeight:400 }}>(optional)</span></label>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>{['stock','etf','crypto'].includes(manualHoldingForm.asset_type) ? 'Ticker' : 'Ticker (optional)'}</label>
                               <input value={manualHoldingForm.ticker} onChange={e => setManualHoldingForm(f => ({ ...f, ticker: e.target.value.toUpperCase() }))}
                                 placeholder="e.g. AAPL"
                                 style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
                             </div>
                             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Name</label>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>{['stock','etf','crypto'].includes(manualHoldingForm.asset_type) ? 'Name (optional)' : 'Name'}</label>
                               <input value={manualHoldingForm.name} onChange={e => setManualHoldingForm(f => ({ ...f, name: e.target.value }))}
                                 placeholder="e.g. Apple Inc."
                                 style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none' }} />
@@ -10589,7 +10594,7 @@ export default function Dashboard() {
                           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
                             <button onClick={() => { setShowManualHoldingForm(false); setManualHoldingEdit(null); }}
                               style={{ padding:'7px 16px', background:'transparent', border:BORDER, borderRadius:7, color:TEXT2, fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
-                            <button disabled={manualHoldingSaving || !manualHoldingForm.name.trim()}
+                            <button disabled={manualHoldingSaving || (['stock','etf','crypto'].includes(manualHoldingForm.asset_type) ? !manualHoldingForm.ticker.trim() : !manualHoldingForm.name.trim())}
                               onClick={async () => {
                                 setManualHoldingSaving(true);
                                 const body = {

@@ -26,10 +26,12 @@ router.get('/budget', requireAuth, async (req, res) => {
     transactions
       .filter(t => {
         if (t.amount <= 0) return false;
-        const primary = (t.personal_finance_category?.primary || t.category?.[0] || '').toUpperCase();
-        if (primary === 'TRANSFER_IN' || primary === 'TRANSFER_OUT') return false;
+        const newCat = (t.personal_finance_category?.primary || '').toUpperCase();
+        if (newCat === 'TRANSFER_IN' || newCat === 'TRANSFER_OUT') return false;
+        const legacyCat = (t.category?.[0] || '').toLowerCase();
+        if (legacyCat === 'transfer') return false;
         const name = (t.merchant_name || t.name || '').toLowerCase();
-        if (/^(transfer (from|to|between)|online transfer|account transfer|zelle transfer)/i.test(name)) return false;
+        if (/\b(online transfer|account transfer|zelle transfer|transfer (from|to|between))/i.test(name)) return false;
         return true;
       })
       .forEach(t => {

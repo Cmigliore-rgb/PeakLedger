@@ -6899,7 +6899,12 @@ export default function Dashboard() {
                   } else {
                     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                     const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
-                    monthIncome   = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+                    const INCOME_CATS_SR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
+                    monthIncome   = monthTxns.filter(t => {
+                      if (t.amount >= 0 || isTransfer(t)) return false;
+                      const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
+                      return [...INCOME_CATS_SR].some(k => cat.includes(k));
+                    }).reduce((s, t) => s + Math.abs(t.amount), 0);
                     monthSpending = monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
                     saved = monthIncome - monthSpending;
                     rate  = monthIncome > 0 ? Math.round((saved / monthIncome) * 100) : null;
@@ -9139,8 +9144,17 @@ export default function Dashboard() {
                     { name: 'Apple iCloud+',   avgAmt: 2.99,  avgGap: 30, frequency: 'Monthly', monthlyCost: 2.99,  lastDate: '2026-04-25' },
                     { name: 'Hulu',            avgAmt: 7.99,  avgGap: 30, frequency: 'Monthly', monthlyCost: 7.99,  lastDate: '2026-04-20' },
                   ];
+                  const NON_SUB_CATS = new Set(['GAS_STATIONS', 'GROCERIES', 'TRANSFER_IN', 'TRANSFER_OUT', 'CREDIT_CARD_PAYMENT', 'LOAN_PAYMENTS']);
                   const groups = {};
-                  activeTxns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => {
+                  activeTxns.filter(t => {
+                    if (t.amount <= 0 || isTransfer(t)) return false;
+                    const cat = resolveCategory(t);
+                    if (NON_SUB_CATS.has(cat)) return false;
+                    // Exclude gas and grocery by name pattern even if category didn't catch it
+                    if (GAS_RE.test(t.merchant_name || t.name || '')) return false;
+                    if (GROCERY_RE.test(t.merchant_name || t.name || '')) return false;
+                    return true;
+                  }).forEach(t => {
                     const key = (t.merchant_name || t.name || '').toLowerCase().trim();
                     if (!key) return;
                     if (!groups[key]) groups[key] = { name: t.merchant_name || t.name, txns: [] };

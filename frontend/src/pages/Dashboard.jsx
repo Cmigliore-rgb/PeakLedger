@@ -763,6 +763,7 @@ function NetWorthChart({ snapshots }) {
   const showPeak = peakIdx !== filtered.length - 1; // don't annotate if peak is also the last point
 
   const PERIODS = [{ label: '7D', days: 7 }, { label: '30D', days: 30 }, { label: '90D', days: 90 }];
+  const hasFullPeriod = period <= snapshots.length;
 
   return (
     <div>
@@ -776,13 +777,19 @@ function NetWorthChart({ snapshots }) {
             <button key={p.days} onClick={() => setPeriod(p.days)}
               style={{ padding: '3px 10px', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
                 background: period === p.days ? CARD_BG : 'transparent',
-                color: period === p.days ? TEXT : TEXT3,
+                color: period === p.days ? TEXT : snapshots.length >= p.days ? TEXT3 : TEXT3,
+                opacity: snapshots.length < p.days ? 0.4 : 1,
                 boxShadow: period === p.days ? '0 1px 3px rgba(0,0,0,0.3)' : 'none' }}>
               {p.label}
             </button>
           ))}
         </div>
       </div>
+      {!hasFullPeriod && (
+        <div style={{ fontSize: 11, color: TEXT3, marginBottom: 8 }}>
+          {snapshots.length} of {period} days of history collected. Chart fills in daily.
+        </div>
+      )}
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
         {[0, 0.5, 1].map(t => {
           const v = minV + t * range;
@@ -1388,7 +1395,8 @@ const CATEGORY_LABEL = {
   EDUCATION:                 'Education',
   MEDICAL:                   'Medical',
   TRAVEL:                    'Travel',
-  LOAN_PAYMENTS:             'Loan Payments',
+  LOAN_PAYMENTS:             'Credit Card Payment',
+  CREDIT_CARD_PAYMENT:       'Credit Card Payment',
   TRANSFER_IN:               'Transfer In',
   TRANSFER_OUT:              'Transfer Out',
   INCOME:                    'Income',
@@ -1416,6 +1424,10 @@ function _resolveCategory(txn) {
   if (/publix\s+pharm/i.test(name)) return 'MEDICAL';
   if (GAS_RE.test(name)) return 'GAS_STATIONS';
   if (GROCERY_RE.test(name)) return 'GROCERIES';
+  if (base === 'LOAN_PAYMENTS') return 'CREDIT_CARD_PAYMENT';
+  const legacyCats = (txn.category || []).map(c => c.toLowerCase());
+  if (legacyCats.includes('payment') && (legacyCats.includes('credit card') || legacyCats.includes('credit'))) return 'CREDIT_CARD_PAYMENT';
+  if (/\b(credit card payment|card payment)\b/i.test(name)) return 'CREDIT_CARD_PAYMENT';
   return base;
 }
 
@@ -3555,6 +3567,7 @@ export default function Dashboard() {
   const [taxItemized, setTaxItemized] = useState('0');
   const mainRef = useRef(null);
   const scrollPositions = useRef({});
+  const savedCatScrollRef = useRef(0);
   const [courseView, setCourseView] = useState('schedule'); // 'schedule' | 'calendar'
   const [calMonth, setCalMonth] = useState(3); // 0=Jan … 4=May (default April)
   const [theme, setTheme] = useState(() => localStorage.getItem('pl_theme') || 'light');
@@ -6760,29 +6773,22 @@ export default function Dashboard() {
                       freeToSpend = totalBudgeted - activeMonthlySpend;
                       subtitle = `${fmt(activeMonthlySpend)} spent of ${fmt(totalBudgeted)} budgeted`;
                     } else {
-                      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                      const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
-                      const mIncome = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
-                      if (mIncome === 0) {
-                        // No income detected: show spending-only card with CTA
-                        return (
-                          <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <div>
-                                <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Month-to-Date Spending</div>
-                                <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color: TEXT, marginBottom: 4 }}>{fmt(activeMonthlySpend)}</div>
-                                <div style={{ fontSize: 12, color: TEXT2 }}>Set budget limits to track against a goal</div>
-                              </div>
-                              <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
-                                style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                Set Limits
-                              </button>
+                      // No budget limits set: always show spending-only card with CTA
+                      return (
+                        <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                              <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Month-to-Date Spending</div>
+                              <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color: TEXT, marginBottom: 4 }}>{fmt(activeMonthlySpend)}</div>
+                              <div style={{ fontSize: 12, color: TEXT2 }}>Set spending limits to see how much you have left</div>
                             </div>
+                            <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
+                              style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              Set Limits
+                            </button>
                           </div>
-                        );
-                      }
-                      freeToSpend = mIncome - activeMonthlySpend;
-                      subtitle = `${fmt(activeMonthlySpend)} spent of ${fmt(mIncome)} earned`;
+                        </div>
+                      );
                     }
                   }
                   const isPositive = freeToSpend >= 0;
@@ -8077,7 +8083,7 @@ export default function Dashboard() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                   {selectedCategory && budgetTab === 'spending' && (
-                    <button onClick={() => setSelectedCategory(null)} style={{ background: MUTED, border: BORDER, borderRadius: 6, color: TEXT2, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}>
+                    <button onClick={() => { setSelectedCategory(null); requestAnimationFrame(() => { if (mainRef.current) mainRef.current.scrollTop = savedCatScrollRef.current; }); }} style={{ background: MUTED, border: BORDER, borderRadius: 6, color: TEXT2, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}>
                       ← Back
                     </button>
                   )}
@@ -8691,7 +8697,7 @@ export default function Dashboard() {
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                                         {cats.slice(0, 4).map((b, i) => (
                                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <button onClick={() => { setSelectedCategory(b.category); setEditingLimit(null); }}
+                                            <button onClick={() => { savedCatScrollRef.current = mainRef.current?.scrollTop || 0; setSelectedCategory(b.category); setEditingLimit(null); }}
                                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontSize: 12, color: TEXT2 }}>
                                               {fmtCat(b.category)}
                                             </button>
@@ -8744,7 +8750,7 @@ export default function Dashboard() {
                                   return (
                                     <div key={i} style={{ marginBottom: 20 }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                        <button onClick={() => { setSelectedCategory(b.category); setEditingLimit(null); }}
+                                        <button onClick={() => { savedCatScrollRef.current = mainRef.current?.scrollTop || 0; setSelectedCategory(b.category); setEditingLimit(null); }}
                                           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
                                           <span style={{ fontSize: 13, fontWeight: 500, textTransform: 'capitalize', color: TEXT }}>{b.category}</span>
                                         </button>
@@ -8793,7 +8799,7 @@ export default function Dashboard() {
                                   <div key={i} style={{ marginBottom: 20 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
-                                        <button onClick={() => { setSelectedCategory(b.category); setEditingLimit(null); }}
+                                        <button onClick={() => { savedCatScrollRef.current = mainRef.current?.scrollTop || 0; setSelectedCategory(b.category); setEditingLimit(null); }}
                                           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 4 }}>
                                           {categoryEmojis[b.category] && <span style={{ fontSize: 14 }}>{categoryEmojis[b.category]}</span>}
                                           <span style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{fmtCat(b.category)}</span>
@@ -8950,42 +8956,6 @@ export default function Dashboard() {
                         })()}
                       </div>
 
-                      {/* ── Credit Card Payments ── */}
-                      {!isDemoData && (() => {
-                        const now = new Date();
-                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                        const ccPayments = activeTxns.filter(t => {
-                          if (t.amount <= 0 || new Date(t.date) < monthStart) return false;
-                          const primary = (t.personal_finance_category?.primary || '').toUpperCase();
-                          if (primary === 'LOAN_PAYMENTS') return true;
-                          const legacyCats = (t.category || []).map(c => c.toLowerCase());
-                          if (legacyCats.includes('payment') && (legacyCats.includes('credit card') || legacyCats.includes('credit'))) return true;
-                          const name = (t.merchant_name || t.name || '').toLowerCase();
-                          return /\b(credit card payment|card payment)\b/i.test(name);
-                        });
-                        if (ccPayments.length === 0) return null;
-                        const total = ccPayments.reduce((s, t) => s + t.amount, 0);
-                        return (
-                          <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${BORDER_C}` }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Credit Card Payments</div>
-                                <div style={{ fontSize: 11, color: TEXT3, marginTop: 2 }}>Excluded from spending total to avoid double-counting</div>
-                              </div>
-                              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace', color: TEXT2 }}>{fmt(total)}</div>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {ccPayments.slice(0, 5).map((t, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${BORDER_C}` }}>
-                                  <div style={{ fontSize: 12, color: TEXT2 }}>{t.merchant_name || t.name}</div>
-                                  <div style={{ fontSize: 12, fontFamily: 'monospace', color: TEXT2 }}>{fmt(t.amount)}</div>
-                                </div>
-                              ))}
-                              {ccPayments.length > 5 && <div style={{ fontSize: 11, color: TEXT3 }}>+{ccPayments.length - 5} more</div>}
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   );
                 })()}

@@ -6792,44 +6792,27 @@ export default function Dashboard() {
                         </div>
                       );
                     }
-                    // Per-category remaining: sum of max(0, limit - spent) so over-budget
-                    // categories contribute $0 and setting any limit only ever increases this number
-                    const catSpend = {};
-                    activeTxns.filter(t => {
-                      const d = new Date(t.date);
-                      const ms = new Date(now.getFullYear(), now.getMonth(), 1);
-                      return t.amount > 0 && !isTransfer(t) && d >= ms && d <= now;
-                    }).forEach(t => { const c = resolveCategory(t); catSpend[c] = (catSpend[c] || 0) + t.amount; });
-                    freeToSpend = limitEntries.reduce((sum, [cat, lim]) => sum + Math.max(0, lim - (catSpend[cat] || 0)), 0);
-                    const overCount = limitEntries.filter(([cat, lim]) => (catSpend[cat] || 0) > lim).length;
-                    subtitle = overCount > 0
-                      ? `${overCount} categor${overCount === 1 ? 'y' : 'ies'} over limit this month`
-                      : `${limitEntries.length} categor${limitEntries.length === 1 ? 'y' : 'ies'} with limits set`;
+                    const totalBudgeted = limitEntries.reduce((s, [, v]) => s + v, 0);
+                    freeToSpend = totalBudgeted - activeMonthlySpend;
+                    subtitle = `${fmt(activeMonthlySpend)} spent of ${fmt(totalBudgeted)} budgeted`;
                   }
-                  const color = GREEN;
-                  const overCount2 = !isDemoData ? Object.entries(budgetLimits).filter(([cat, lim]) => {
-                    const d = new Date(); const ms = new Date(d.getFullYear(), d.getMonth(), 1);
-                    const spent = activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= ms && resolveCategory(t) === cat).reduce((s, t) => s + t.amount, 0);
-                    return spent > lim;
-                  }).length : 0;
+                  const isPositive = freeToSpend >= 0;
+                  const color = isPositive ? GREEN : RED;
                   return (
-                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: `${GREEN}50` }}>
+                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
                           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
-                            {fmt(freeToSpend)}
+                            {isPositive ? '' : '−'}{fmt(Math.abs(freeToSpend))}
                           </div>
                           <div style={{ fontSize: 12, color: TEXT2 }}>{subtitle}</div>
                         </div>
                         <div style={{ fontSize: 11, color: TEXT3, textAlign: 'right', lineHeight: 1.5 }}>
-                          <div style={{ fontSize: 22, marginBottom: 2 }}>✓</div>
-                          <div style={{ color: GREEN }}>Remaining</div>
+                          <div style={{ fontSize: 22, marginBottom: 2 }}>{isPositive ? '✓' : '⚠'}</div>
+                          <div style={{ color }}>{isPositive ? 'On track' : 'Over budget'}</div>
                         </div>
                       </div>
-                      {overCount2 > 0 && (
-                        <div style={{ marginTop: 10, fontSize: 12, color: RED }}>⚠ {overCount2} categor{overCount2 === 1 ? 'y' : 'ies'} over limit. <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }} style={{ background: 'none', border: 'none', color: BLUE, fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>Review</button></div>
-                      )}
                     </div>
                   );
                 })()}

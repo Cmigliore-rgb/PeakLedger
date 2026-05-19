@@ -3696,7 +3696,6 @@ export default function Dashboard() {
   const [syncingBank, setSyncingBank]       = useState(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [lastSynced, setLastSynced]         = useState(null);
-  const [toast, setToast]                   = useState(null);
   useEffect(() => {
     const handle = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handle);
@@ -4665,8 +4664,9 @@ export default function Dashboard() {
   const activeBudget         = sbBudget            || budget;
   const _spendNow = new Date();
   const _spendMonthStart = new Date(_spendNow.getFullYear(), _spendNow.getMonth(), 1);
+  const _hasCreditAccts = activeAccounts.some(a => a.type === 'credit');
   const activeMonthlySpend = activeTxns
-    .filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= _spendMonthStart && new Date(t.date) <= _spendNow)
+    .filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return new Date(t.date) >= _spendMonthStart && new Date(t.date) <= _spendNow; })
     .reduce((s, t) => s + t.amount, 0);
   const activeTotalPortfolio = activeHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
 
@@ -8499,6 +8499,8 @@ export default function Dashboard() {
                   const selExpIdx = 5 - selectedExpenseMonth;
                   const selExp    = display[selExpIdx] || display[5];
 
+                  const hasCreditAccts = activeAccounts.some(a => a.type === 'credit');
+                  const isExcludedSpend = t => isTransfer(t) || (hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT');
                   let displayBudget;
                   if (!hasRealExp) {
                     displayBudget = [];
@@ -8506,12 +8508,12 @@ export default function Dashboard() {
                     {
                       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       const ct = {};
-                      activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
+                      activeTxns.filter(t => t.amount > 0 && !isExcludedSpend(t) && new Date(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
                       displayBudget = Object.entries(ct).map(([category, total]) => ({ category, total: Math.round(total * 100) / 100 })).sort((a, b) => b.total - a.total);
                     }
                   } else {
                     const catTotals = {};
-                    selExp.txns.forEach(t => {
+                    selExp.txns.filter(t => !isExcludedSpend(t)).forEach(t => {
                       const cat = resolveCategory(t);
                       catTotals[cat] = (catTotals[cat] || 0) + t.amount;
                     });
@@ -9059,8 +9061,10 @@ export default function Dashboard() {
                   const inRange = (t, from, to) => { const d = new Date(t.date); return d >= from && d <= to; };
                   const thisTxns = activeTxns.filter(t => inRange(t, thisMonthStart, now));
                   const lastTxns = activeTxns.filter(t => inRange(t, lastMonthStart, lastMonthEnd));
-                  const income   = txns => txns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
-                  const expenses = txns => txns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
+                  const INCOME_CATS_TR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
+                  const income   = txns => txns.filter(t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_TR].some(k => cat.includes(k)); }).reduce((s, t) => s + Math.abs(t.amount), 0);
+                  const hasCreditAccounts = activeAccounts.some(a => a.type === 'credit');
+                  const expenses = txns => txns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (hasCreditAccounts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0);
                   const thisIncome = income(thisTxns), thisExpenses = expenses(thisTxns);
                   const lastIncome = income(lastTxns),  lastExpenses = expenses(lastTxns);
                   const thisNet = thisIncome - thisExpenses, lastNet = lastIncome - lastExpenses;

@@ -150,6 +150,27 @@ const PANEL_SUBTABS = {
   ],
 };
 
+const OV_WIDGETS = [
+  { key: 'stats',               label: 'Net Worth Stats',         size: 'full',  pinned: true,  defaultOn: true,  desc: 'Net worth, total assets and liabilities' },
+  { key: 'free-to-spend',       label: 'Free to Spend',           size: 'half',  pinned: false, defaultOn: true,  desc: 'Budget remaining for this month' },
+  { key: 'savings-rate',        label: 'Monthly Savings Rate',    size: 'half',  pinned: false, defaultOn: true,  desc: 'How much of your income you saved' },
+  { key: 'chart',               label: 'Net Worth History',       size: 'full',  pinned: false, defaultOn: true,  desc: 'Net worth over time' },
+  { key: 'goals',               label: 'Savings Goals',           size: 'half',  pinned: false, defaultOn: true,  desc: 'Track progress toward financial goals' },
+  { key: 'txns',                label: 'Recent Transactions',     size: 'half',  pinned: false, defaultOn: true,  desc: 'Latest spending activity' },
+  { key: 'calendar',            label: 'Spending Calendar',       size: 'full',  pinned: false, defaultOn: true,  desc: 'Monthly calendar with bills and events' },
+  { key: 'market-alerts',       label: 'Market Alerts',           size: 'half',  pinned: false, defaultOn: false, desc: 'Financial news and market headlines' },
+  { key: 'top-spending',        label: 'Top Spending Categories', size: 'half',  pinned: false, defaultOn: false, desc: 'Where your money went this month' },
+  { key: 'account-balances',    label: 'Account Balances',        size: 'half',  pinned: false, defaultOn: false, desc: 'Current balance for each linked account' },
+  { key: 'subscriptions',       label: 'Subscriptions',           size: 'half',  pinned: false, defaultOn: false, desc: 'Recurring charges detected this month' },
+  { key: 'investment-snapshot', label: 'Investment Snapshot',     size: 'half',  pinned: false, defaultOn: false, desc: 'Portfolio value and top holdings' },
+  { key: 'debt-summary',        label: 'Debt Summary',            size: 'half',  pinned: false, defaultOn: false, desc: 'Total debt and upcoming payments' },
+  { key: 'cash-flow-baseline',  label: 'Cash Flow Baseline',      size: 'full',  pinned: false, defaultOn: false, desc: 'Spending vs your historical average' },
+  { key: 'budget-progress',     label: 'Budget Progress',         size: 'half',  pinned: false, defaultOn: false, desc: 'Category limits and spending so far' },
+];
+const OV_WIDGETS_MAP = Object.fromEntries(OV_WIDGETS.map(w => [w.key, w]));
+const _OV_ALL_KEYS     = OV_WIDGETS.map(w => w.key);
+const _OV_DEFAULT_KEYS = OV_WIDGETS.filter(w => w.defaultOn).map(w => w.key);
+
 const fmt = (n) =>
   typeof n === 'number'
     ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -3461,6 +3482,13 @@ export default function Dashboard() {
   const [connectBannerDismissed, setConnectBannerDismissed] = useState(
     () => localStorage.getItem('pl_connect_banner_dismissed') === '1'
   );
+  const [ovEnabled, setOvEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`pl_ov_enabled_${user?.id || 'guest'}`);
+      return new Set(saved ? JSON.parse(saved) : _OV_DEFAULT_KEYS);
+    } catch { return new Set(_OV_DEFAULT_KEYS); }
+  });
+  const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [hideEduSection, setHideEduSection] = useState(
     () => localStorage.getItem('pl_hide_edu') === '1'
   );
@@ -3598,7 +3626,7 @@ export default function Dashboard() {
   const [taxIncome, setTaxIncome] = useState('65000');
   const [taxFiling, setTaxFiling] = useState('single');
   const [schHours,      setSchHours]      = useState('45');
-  const [schHopeGPA,    setSchHopeGPA]    = useState('3.20');
+  const [schHopeGPA,    setSchHopeGPA]    = useState('');
   const [schSemesters,  setSchSemesters]  = useState('3');
   const [schCourses,    setSchCourses]    = useState([
     { id: 1, name: '', credits: '3', grade: 'B' },
@@ -6643,30 +6671,44 @@ export default function Dashboard() {
               const _h = new Date().getHours();
               const _g = _h < 12 ? 'Good morning' : _h < 17 ? 'Good afternoon' : 'Good evening';
               const _n = user?.name?.split(' ')[0] || 'there';
-              const _OV_DEF = ['stats', 'free-to-spend', 'savings-rate', 'chart', 'goals', 'txns', 'calendar'];
+              const _OV_DEF = _OV_ALL_KEYS;
               const _ovOrder = getOrder('overview', _OV_DEF);
               const _ovReorder = handleReorder('overview', _OV_DEF);
               const _ovCustom = !!layoutOrder['overview'];
               const _noAccounts = !isDemoData && activeAccounts.length === 0;
-              const _reviewKey = `pl_review_seen_${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}_${user?.id}`;
-              const _reviewSeen = !!localStorage.getItem(_reviewKey);
+
+              // Build active widget list and auto-pair into rows
+              const _activeWidgets = _ovOrder.filter(k => ovEnabled.has(k));
+              const _ovRows = [];
+              { let _wi = 0;
+                while (_wi < _activeWidgets.length) {
+                  const _key = _activeWidgets[_wi];
+                  const _w = OV_WIDGETS_MAP[_key];
+                  if (!_w) { _wi++; continue; }
+                  if (_w.pinned || _w.size === 'full') {
+                    _ovRows.push({ type: 'full', keys: [_key] });
+                    _wi++;
+                  } else {
+                    const _nk = _activeWidgets[_wi + 1];
+                    const _nw = _nk ? OV_WIDGETS_MAP[_nk] : null;
+                    if (_nw && _nw.size === 'half' && !_nw.pinned) {
+                      _ovRows.push({ type: 'pair', keys: [_key, _nk] });
+                      _wi += 2;
+                    } else {
+                      _ovRows.push({ type: 'full', keys: [_key] });
+                      _wi++;
+                    }
+                  }
+                }
+              }
               return (
               <div>
-                {!_reviewSeen && !isDemoData && (
-                  <style>{`@keyframes pl-pulse-review { 0%,100%{box-shadow:0 0 0 0 rgba(77,163,255,0.5)} 50%{box-shadow:0 0 0 6px rgba(77,163,255,0)} }`}</style>
-                )}
+                <style>{`@keyframes pl-pulse-review { 0%,100%{box-shadow:0 0 0 0 rgba(77,163,255,0.5)} 50%{box-shadow:0 0 0 6px rgba(77,163,255,0)} }`}</style>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24 }}>
                   <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{_g}, {_n}</h1>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    {!isDemoData && (
-                      <button
-                        onClick={() => { setShowMonthlyReview(true); localStorage.setItem(_reviewKey, '1'); }}
-                        style={{ background: _reviewSeen ? 'none' : 'rgba(77,163,255,0.12)', border: _reviewSeen ? 'none' : '1px solid rgba(77,163,255,0.4)', borderRadius: 6, color: BLUE, fontSize: 12, cursor: 'pointer', fontWeight: 600, padding: _reviewSeen ? 0 : '4px 10px', animation: _reviewSeen ? 'none' : 'pl-pulse-review 1.8s ease-in-out infinite' }}
-                      >
-                        {new Date().toLocaleDateString('en-US', { month: 'long' })} Review
-                      </button>
-                    )}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {_ovCustom && <button onClick={() => resetLayout('overview')} style={{ background: 'none', border: 'none', color: TEXT3, fontSize: 11, cursor: 'pointer', padding: 0 }}>Reset layout</button>}
+                    <button onClick={() => setShowWidgetPicker(true)} style={{ padding: '6px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Customize</button>
                   </div>
                 </div>
 
@@ -6830,8 +6872,9 @@ export default function Dashboard() {
                 </div>{/* overview-snapshot */}
                 </DragSection>
 
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 0, alignItems: 'start' }}>
-                <DragSection id="free-to-spend" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                {(ovEnabled.has('free-to-spend') || ovEnabled.has('savings-rate')) && (
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (ovEnabled.has('free-to-spend') && ovEnabled.has('savings-rate') ? '1fr 1fr' : '1fr'), gap: 16, marginBottom: 0, alignItems: 'stretch' }}>
+                {ovEnabled.has('free-to-spend') && <DragSection id="free-to-spend" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 {(() => {
                   const now = new Date();
                   let freeToSpend, subtitle;
@@ -6839,11 +6882,12 @@ export default function Dashboard() {
                     freeToSpend = 480;
                     subtitle = 'Remaining this month based on budget limits';
                   } else {
-                    const limitEntries = Object.entries(budgetLimits);
+                    const _ftspHasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                    const limitEntries = Object.entries(budgetLimits).filter(([cat]) => !(_ftspHasCCAccts && cat === 'CREDIT_CARD_PAYMENT'));
                     if (limitEntries.length === 0) {
                       // No budget limits set: show spending-only card with CTA
                       return (
-                        <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                        <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div>
                               <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Month-to-Date Spending</div>
@@ -6860,8 +6904,13 @@ export default function Dashboard() {
                     }
                     const totalBudgeted = limitEntries.reduce((s, [, v]) => s + v, 0);
                     const monthStart2 = new Date(now.getFullYear(), now.getMonth(), 1);
-                    const limitedCatSpend = limitEntries.reduce((s, [cat, ]) => {
-                      const catTotal = activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= monthStart2 && new Date(t.date) <= now && resolveCategory(t) === cat).reduce((a, t) => a + t.amount, 0);
+                    const limitedCatSpend = limitEntries.reduce((s, [cat]) => {
+                      const catTotal = activeTxns.filter(t => {
+                        if (t.amount <= 0 || isTransfer(t)) return false;
+                        if (_ftspHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
+                        const d = new Date(t.date);
+                        return d >= monthStart2 && d <= now && resolveCategory(t) === cat;
+                      }).reduce((a, t) => a + t.amount, 0);
                       return s + catTotal;
                     }, 0);
                     freeToSpend = totalBudgeted - limitedCatSpend;
@@ -6870,7 +6919,7 @@ export default function Dashboard() {
                   const isPositive = freeToSpend >= 0;
                   const color = isPositive ? GREEN : RED;
                   return (
-                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
+                    <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50`, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                         <div>
                           <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
@@ -6906,9 +6955,9 @@ export default function Dashboard() {
                     </div>
                   );
                 })()}
-                </DragSection>
+                </DragSection>}
 
-                <DragSection id="savings-rate" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                {ovEnabled.has('savings-rate') && <DragSection id="savings-rate" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 {/* ── Savings Rate Card ── */}
                 {(() => {
                   const now = new Date();
@@ -6925,15 +6974,18 @@ export default function Dashboard() {
                       const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
                       return [...INCOME_CATS_SR].some(k => cat.includes(k));
                     }).reduce((s, t) => s + Math.abs(t.amount), 0);
-                    monthSpending = monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
+                    const _srHasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                    monthSpending = monthTxns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_srHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0);
                     saved = monthIncome - monthSpending;
                     rate  = monthIncome > 0 ? Math.round((saved / monthIncome) * 100) : null;
                   }
                   const rateColor = rate === null ? TEXT2 : rate >= 20 ? GREEN : rate >= 10 ? YELLOW : rate >= 0 ? TEXT : RED;
                   const TARGET = 20;
+                  const _reviewKeyInner = `pl_review_seen_${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}_${user?.id}`;
+                  const _reviewSeenInner = !!localStorage.getItem(_reviewKeyInner);
                   return (
-                    <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 16 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: isDemoData ? 8 : 12 }}>
+                    <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isDemoData ? 8 : 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <div style={{ fontSize: 12, fontWeight: 700 }}>Monthly Savings Rate</div>
                           <button onClick={() => openTourAt(2)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', color: TEXT3, fontSize: 9, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
@@ -6945,40 +6997,45 @@ export default function Dashboard() {
                           Demo data — connect to see real savings rate.
                         </div>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-                        <div style={{ flexShrink: 0 }}>
-                          <div style={{ fontSize: 9, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Rate</div>
-                          <div style={{ fontSize: 30, fontWeight: 800, color: rateColor, letterSpacing: '-1.5px', lineHeight: 1 }}>{rate !== null ? `${rate}%` : '—'}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, paddingTop: 2 }}>
-                          {[
-                            { label: 'Income',   value: fmt(monthIncome),  color: GREEN },
-                            { label: 'Spending', value: fmt(monthSpending), color: RED   },
-                            { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`, color: saved >= 0 ? GREEN : RED },
-                          ].map(({ label, value, color }) => (
-                            <div key={label} style={{ minWidth: 0, overflow: 'hidden' }}>
-                              <div style={{ fontSize: 9, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 2 }}>{label}</div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-                            </div>
-                          ))}
-                        </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                        <div style={{ fontSize: 32, fontWeight: 800, color: rateColor, letterSpacing: '-1.5px', lineHeight: 1, flexShrink: 0 }}>{rate !== null ? `${rate}%` : '—'}</div>
+                        <div style={{ fontSize: 11, color: TEXT3, lineHeight: 1.5 }}>saved this month</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 8, overflow: 'hidden', border: BORDER }}>
+                        {[
+                          { label: 'Income',   value: fmt(monthIncome),  color: GREEN },
+                          { label: 'Spending', value: fmt(monthSpending), color: RED   },
+                          { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`, color: saved >= 0 ? GREEN : RED },
+                        ].map(({ label, value, color }, i) => (
+                          <div key={label} style={{ flex: 1, padding: '8px 0', textAlign: 'center', borderLeft: i > 0 ? BORDER : 'none' }}>
+                            <div style={{ fontSize: 9, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3 }}>{label}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
+                          </div>
+                        ))}
                       </div>
                       <div style={{ background: MUTED, borderRadius: 4, height: 5, overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(Math.max(rate ?? 0, 0), 100)}%`, height: '100%', background: rateColor, borderRadius: 4, transition: 'width 0.6s ease' }} />
                       </div>
-                      <div style={{ position: 'relative', marginTop: 4, fontSize: 10, color: TEXT3, height: 13 }}>
+                      <div style={{ position: 'relative', marginTop: 4, fontSize: 10, color: TEXT3, height: 13, marginBottom: 12 }}>
                         <span style={{ position: 'absolute', left: 0 }}>0%</span>
                         <span style={{ position: 'absolute', left: `${TARGET}%`, transform: 'translateX(-50%)', color: rate !== null && rate >= TARGET ? GREEN : TEXT3 }}>{TARGET}% target</span>
                         <span style={{ position: 'absolute', right: 0 }}>100%</span>
                       </div>
+                      {!isDemoData && (
+                        <button
+                          onClick={() => { setShowMonthlyReview(true); localStorage.setItem(_reviewKeyInner, '1'); }}
+                          style={{ marginTop: 'auto', width: '100%', padding: '7px 0', background: _reviewSeenInner ? 'rgba(255,255,255,0.03)' : 'rgba(77,163,255,0.1)', border: _reviewSeenInner ? BORDER : '1px solid rgba(77,163,255,0.35)', borderRadius: 7, color: _reviewSeenInner ? TEXT3 : BLUE, fontSize: 12, fontWeight: 600, cursor: 'pointer', animation: _reviewSeenInner ? 'none' : 'pl-pulse-review 1.8s ease-in-out infinite' }}>
+                          {now.toLocaleDateString('en-US', { month: 'long' })} Review →
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
-                </DragSection>
-                </div>{/* end free-to-spend + savings-rate row */}
+                </DragSection>}
+                </div>
+                )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 0, alignItems: 'start' }}>
-                <DragSection id="chart" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                {ovEnabled.has('chart') && <DragSection id="chart" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div data-tour="overview-networth-chart" style={{ ...CARD, marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>Net Worth History</div>
@@ -6991,9 +7048,11 @@ export default function Dashboard() {
                   )}
                   <NetWorthChart snapshots={isDemoData ? DEMO_SNAPSHOTS : snapshots} />
                 </div>
+                </DragSection>}
 
-                </DragSection>
-                <DragSection id="goals" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                {(ovEnabled.has('goals') || ovEnabled.has('txns')) && (
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (ovEnabled.has('goals') && ovEnabled.has('txns') ? '2fr 3fr' : '1fr'), gap: 16, marginBottom: 0, alignItems: 'stretch' }}>
+                {ovEnabled.has('goals') && <DragSection id="goals" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: goals.length ? 16 : 0 }}>
                     <div style={{ fontWeight: 600 }}>Savings Goals</div>
@@ -7104,75 +7163,63 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                </DragSection>
-                </div>{/* end chart + goals row */}
+                </DragSection>}
 
-                <DragSection id="txns" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '3fr 2fr', gap: 16 }}>
-                  <div data-tour="overview-txns" className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden' }}>
-                    <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Transactions</div>
-                    {transactions.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '28px 16px' }}>
-                        <div style={{ fontSize: 28, marginBottom: 8 }}>↕</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: TEXT2, marginBottom: 4 }}>No transactions yet</div>
-                        <div style={{ fontSize: 12, color: TEXT3 }}>Connect a bank account to see your spending here.</div>
-                      </div>
-                    ) : (
-                      <div className="card-scroll" style={{ maxHeight: 180 }}>
-                        {(() => {
-                          const todayStr = new Date().toISOString().slice(0, 10);
-                          const yestStr  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-                          const items = [];
-                          let lastDate = null;
-                          transactions.forEach((t, i) => {
-                            const d = (t.date || '').slice(0, 10);
-                            if (d !== lastDate) {
-                              const label = d === todayStr ? 'Today' : d === yestStr ? 'Yesterday'
-                                : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                              items.push({ type: 'header', label, key: `h-${d}` });
-                              lastDate = d;
-                            }
-                            items.push({ type: 'txn', t, i });
-                          });
-                          return items.map(item => {
-                            if (item.type === 'header') return (
-                              <div key={item.key} style={{ padding: '10px 0 4px', fontSize: 10, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '0.7px' }}>{item.label}</div>
-                            );
-                            const { t, i } = item;
-                            return (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${BORDER_C}`, gap: 10 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                                  <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={32} radius={8} />
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.merchant_name || t.name}</div>
-                                    <div style={{ fontSize: 12, color: TEXT2 }}>{fmtCat(resolveCategory(t))}</div>
-                                  </div>
-                                </div>
-                                <div style={{ fontWeight: 600, color: t.amount > 0 ? RED : GREEN, fontFamily: 'monospace', flexShrink: 0 }}>
-                                  {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
+                {ovEnabled.has('txns') && <DragSection id="txns" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                <div data-tour="overview-txns" className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden', height: '100%', boxSizing: 'border-box' }}>
+                  <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Transactions</div>
+                  {transactions.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '28px 16px' }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>↕</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: TEXT2, marginBottom: 4 }}>No transactions yet</div>
+                      <div style={{ fontSize: 12, color: TEXT3 }}>Connect a bank account to see your spending here.</div>
+                    </div>
+                  ) : (
+                    <div className="card-scroll" style={{ maxHeight: 220 }}>
+                      {(() => {
+                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const yestStr  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                        const items = [];
+                        let lastDate = null;
+                        transactions.forEach((t, i) => {
+                          const d = (t.date || '').slice(0, 10);
+                          if (d !== lastDate) {
+                            const label = d === todayStr ? 'Today' : d === yestStr ? 'Yesterday'
+                              : new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                            items.push({ type: 'header', label, key: `h-${d}` });
+                            lastDate = d;
+                          }
+                          items.push({ type: 'txn', t, i });
+                        });
+                        return items.map(item => {
+                          if (item.type === 'header') return (
+                            <div key={item.key} style={{ padding: '10px 0 4px', fontSize: 10, fontWeight: 700, color: TEXT3, textTransform: 'uppercase', letterSpacing: '0.7px' }}>{item.label}</div>
+                          );
+                          const { t, i } = item;
+                          return (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${BORDER_C}`, gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={32} radius={8} />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.merchant_name || t.name}</div>
+                                  <div style={{ fontSize: 12, color: TEXT2 }}>{fmtCat(resolveCategory(t))}</div>
                                 </div>
                               </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="lc" style={{ ...CARD, minWidth: 0, overflow: 'hidden' }}>
-                    <div style={{ fontWeight: 600, marginBottom: 12 }}>Market Alerts</div>
-                    <div className="card-scroll" style={{ maxHeight: 180 }}>
-                      {articles.map((a, i, arr) => (
-                        <div key={i} style={{ padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${BORDER_C}` : 'none' }}>
-                          <a href={a.url !== '#' ? a.url : undefined} target={a.url !== '#' ? '_blank' : undefined} rel="noreferrer" style={{ color: TEXT, textDecoration: 'none', fontSize: 13, fontWeight: 500, lineHeight: 1.4, display: 'block' }}>{a.headline}</a>
-                          <div style={{ fontSize: 11, color: TEXT2, marginTop: 4 }}>{a.source} · {fmtDate(a.created_at)}</div>
-                        </div>
-                      ))}
+                              <div style={{ fontWeight: 600, color: t.amount > 0 ? RED : GREEN, fontFamily: 'monospace', flexShrink: 0 }}>
+                                {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
-                  </div>
+                  )}
                 </div>
-                </DragSection>
+                </DragSection>}
+                </div>
+                )}
 
-                <DragSection id="calendar" panel="overview" order={_ovOrder} onReorder={_ovReorder} handleTop={22}>
+                {ovEnabled.has('calendar') && <DragSection id="calendar" panel="overview" order={_ovOrder} onReorder={_ovReorder} handleTop={22}>
                 {(() => {
                   const EVENT_TYPES = {
                     reminder:     { label: 'Reminder',     color: BLUE   },
@@ -7400,9 +7447,321 @@ export default function Dashboard() {
                     </div>
                   );
                 })()}
-                </DragSection>
+                </DragSection>}
+
+                {/* ── Additional Widgets (opt-in) ── */}
+                {(() => {
+                  const _newHalves = ['market-alerts','top-spending','account-balances','subscriptions','investment-snapshot','debt-summary','budget-progress'].filter(k => ovEnabled.has(k));
+                  const _newFulls  = ['cash-flow-baseline'].filter(k => ovEnabled.has(k));
+                  if (!_newHalves.length && !_newFulls.length) return null;
+                  // pair halves into rows
+                  const _nwRows = [];
+                  for (let _ni = 0; _ni < _newHalves.length; _ni += 2) {
+                    if (_ni + 1 < _newHalves.length) _nwRows.push([_newHalves[_ni], _newHalves[_ni+1]]);
+                    else _nwRows.push([_newHalves[_ni]]);
+                  }
+                  const ACCT_TYPE_COLOR = { checking: BLUE, savings: GREEN, credit: RED, investment: '#a78bfa', loan: YELLOW, mortgage: YELLOW, student: YELLOW };
+                  const renderNewWidget = (key) => {
+                    switch (key) {
+                      case 'market-alerts': return (
+                        <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                          <div style={{ fontWeight: 600, marginBottom: 12 }}>Market Alerts</div>
+                          {articles.length === 0 ? (
+                            <div style={{ fontSize: 12, color: TEXT3, textAlign: 'center', padding: '16px 0' }}>Loading headlines...</div>
+                          ) : (
+                            <div className="card-scroll" style={{ maxHeight: 220 }}>
+                              {articles.slice(0, 10).map((a, i) => (
+                                <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '9px 0', borderBottom: `1px solid ${BORDER_C}`, textDecoration: 'none' }}>
+                                  <div style={{ fontSize: 12, fontWeight: 500, color: TEXT, lineHeight: 1.4 }}>{a.headline}</div>
+                                  <div style={{ fontSize: 10, color: TEXT3 }}>{a.source} · {fmtDate(a.created_at)}</div>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                      case 'top-spending': return (() => {
+                        const now = new Date();
+                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const _hasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                        const spendMap = {};
+                        activeTxns.filter(t => {
+                          if (t.amount <= 0 || isTransfer(t)) return false;
+                          if (_hasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
+                          const d = new Date(t.date);
+                          return d >= monthStart && d <= now;
+                        }).forEach(t => {
+                          const c = fmtCat(resolveCategory(t));
+                          spendMap[c] = (spendMap[c] || 0) + t.amount;
+                        });
+                        const rows = Object.entries(spendMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
+                        const maxAmt = Math.max(...rows.map(r => r[1]), 1);
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 12 }}>Top Spending Categories</div>
+                            {rows.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No spending this month.</div> : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {rows.map(([cat, amt]) => (
+                                  <div key={cat}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                      <span style={{ fontSize: 12, color: TEXT }}>{cat}</span>
+                                      <span style={{ fontSize: 12, fontWeight: 700, color: TEXT, fontFamily: 'monospace' }}>{fmt(amt)}</span>
+                                    </div>
+                                    <div style={{ height: 5, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: `${(amt / maxAmt) * 100}%`, background: BLUE_BTN, borderRadius: 3 }} />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })();
+                      case 'account-balances': return (() => {
+                        const bankAccts = activeAccounts.filter(a => a.type !== 'investment');
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 12 }}>Account Balances</div>
+                            {bankAccts.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No accounts connected.</div> : (
+                              <div className="card-scroll" style={{ maxHeight: 220 }}>
+                                {bankAccts.map(a => (
+                                  <div key={a.account_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                    <div>
+                                      <div style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{cleanAcctName(a.name, a.subtype, a.type, a.mask)}</div>
+                                      <div style={{ fontSize: 11, color: TEXT3 }}>{a.institution_name || fmtAcctType(a.subtype, a.type)}</div>
+                                    </div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: ACCT_TYPE_COLOR[a.type] || TEXT }}>{fmt(a.balances?.current)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })();
+                      case 'subscriptions': return (() => {
+                        const NON_SUB = new Set(['GAS_STATIONS','GROCERIES','TRANSFER_IN','TRANSFER_OUT','CREDIT_CARD_PAYMENT','LOAN_PAYMENTS']);
+                        const groups = {};
+                        activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && !NON_SUB.has(resolveCategory(t))).forEach(t => {
+                          const key = (t.merchant_name || t.name || '').toLowerCase().trim();
+                          if (!key) return;
+                          if (!groups[key]) groups[key] = { name: t.merchant_name || t.name, txns: [] };
+                          groups[key].txns.push(t);
+                        });
+                        const subs = Object.values(groups).filter(g => {
+                          if (g.txns.length < 2) return false;
+                          const sorted = [...g.txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                          const avg = sorted.reduce((s, t) => s + t.amount, 0) / sorted.length;
+                          return sorted.every(t => Math.abs(t.amount - avg) / avg <= 0.15);
+                        }).map(g => {
+                          const avg = g.txns.reduce((s, t) => s + t.amount, 0) / g.txns.length;
+                          return { name: g.name, monthlyCost: avg };
+                        }).sort((a, b) => b.monthlyCost - a.monthlyCost).slice(0, 6);
+                        const total = subs.reduce((s, sub) => s + sub.monthlyCost, 0);
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                              <div style={{ fontWeight: 600 }}>Subscriptions</div>
+                              {subs.length > 0 && <span style={{ fontSize: 12, color: RED, fontWeight: 700, fontFamily: 'monospace' }}>{fmt(total)}/mo</span>}
+                            </div>
+                            {subs.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No recurring charges detected.</div> : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                {subs.map(sub => (
+                                  <div key={sub.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                    <span style={{ fontSize: 12, color: TEXT }}>{sub.name}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: RED }}>{fmt(sub.monthlyCost)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })();
+                      case 'investment-snapshot': return (() => {
+                        const investAccts = activeAccounts.filter(a => a.type === 'investment');
+                        const portValue = holdings.reduce((s, h) => s + (h.institution_value || (h.quantity * (h.security?.close_price || 0)) || 0), 0);
+                        const topHoldings = [...holdings].sort((a, b) => (b.institution_value || 0) - (a.institution_value || 0)).slice(0, 5);
+                        if (investAccts.length === 0 && !isDemoData) return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                            <div style={{ fontWeight: 600, marginBottom: 8 }}>Investment Snapshot</div>
+                            <div style={{ fontSize: 12, color: TEXT3 }}>No brokerage accounts connected.</div>
+                          </div>
+                        );
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                              <div style={{ fontWeight: 600 }}>Investment Snapshot</div>
+                              <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: GREEN }}>{fmt(portValue)}</span>
+                            </div>
+                            {topHoldings.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No holdings data.</div> : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                {topHoldings.map(h => {
+                                  const sym = h.security?.ticker_symbol || h.security?.name || 'Unknown';
+                                  const val = h.institution_value || (h.quantity * (h.security?.close_price || 0));
+                                  const pct = portValue > 0 ? ((val / portValue) * 100).toFixed(1) : 0;
+                                  return (
+                                    <div key={h.security_id || sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                      <div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>{sym}</div>
+                                        <div style={{ fontSize: 11, color: TEXT3 }}>{pct}% of portfolio</div>
+                                      </div>
+                                      <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: TEXT }}>{fmt(val)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })();
+                      case 'debt-summary': return (() => {
+                        const allDebts = [
+                          ...(liabilities.credit  || []).map(c => ({ name: c._name || 'Credit Card', balance: c.balances?.current || 0, nextDue: c.next_payment_due_date, minPmt: c.minimum_payment_amount })),
+                          ...(liabilities.student  || []).map(s => ({ name: s._name || 'Student Loan', balance: s.balances?.current || 0, nextDue: s.next_payment_due_date, minPmt: s.last_payment_amount })),
+                          ...(liabilities.mortgage || []).map(m => ({ name: m._name || 'Mortgage', balance: m.balances?.current || 0, nextDue: m.next_monthly_payment_date, minPmt: m.next_monthly_payment })),
+                        ].filter(d => d.balance > 0).sort((a, b) => b.balance - a.balance);
+                        const totalDebt = allDebts.reduce((s, d) => s + d.balance, 0);
+                        const nextDue = [...allDebts].filter(d => d.nextDue).sort((a, b) => a.nextDue.localeCompare(b.nextDue))[0];
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                              <div style={{ fontWeight: 600 }}>Debt Summary</div>
+                              <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: RED }}>{fmt(totalDebt)}</span>
+                            </div>
+                            {nextDue && (
+                              <div style={{ fontSize: 11, color: YELLOW, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 6, padding: '6px 10px', marginBottom: 10 }}>
+                                Next payment: {nextDue.name} due {fmtDate(nextDue.nextDue)}{nextDue.minPmt ? ` (${fmt(nextDue.minPmt)})` : ''}
+                              </div>
+                            )}
+                            {allDebts.length === 0 ? <div style={{ fontSize: 12, color: TEXT3 }}>No debt accounts found.</div> : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                {allDebts.slice(0, 5).map((d, i) => (
+                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                    <span style={{ fontSize: 12, color: TEXT }}>{d.name}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: RED }}>{fmt(d.balance)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })();
+                      case 'cash-flow-baseline': return (() => {
+                        const display = baselineData?.baseline ? baselineData : (isDemoData ? DEMO_BASELINE : null);
+                        if (!display) return null;
+                        return (
+                          <div data-tour="overview-baseline" style={{ ...CARD, marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>Cash Flow Baseline</div>
+                              {baselineData?.baseline && <span style={{ fontSize: 11, color: TEXT3 }}>Based on {baselineData.baseline.monthsOfData} mo of history</span>}
+                            </div>
+                            {display.isDemo && <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>Demo data. Connect an account to see your real baseline.</div>}
+                            <BaselineChart months={display.months} baseline={display.baseline} currentMTD={display.currentMTD} status={display.status} onRefresh={refreshBaseline} refreshing={baselineRefreshing} isDemo={!!display.isDemo} />
+                          </div>
+                        );
+                      })();
+                      case 'budget-progress': return (() => {
+                        const _bpHasCCAccts = activeAccounts.some(a => a.type === 'credit');
+                        const limitEntries = Object.entries(budgetLimits).filter(([cat]) => !(_bpHasCCAccts && cat === 'CREDIT_CARD_PAYMENT'));
+                        if (limitEntries.length === 0) return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                            <div style={{ fontWeight: 600, marginBottom: 8 }}>Budget Progress</div>
+                            <div style={{ fontSize: 12, color: TEXT3 }}>No budget limits set. <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }} style={{ background: 'none', border: 'none', color: BLUE, cursor: 'pointer', fontSize: 12, padding: 0 }}>Set limits →</button></div>
+                          </div>
+                        );
+                        const now = new Date();
+                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 12 }}>Budget Progress</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              {limitEntries.map(([cat, limit]) => {
+                                const spent = activeTxns.filter(t => {
+                                  if (t.amount <= 0 || isTransfer(t)) return false;
+                                  if (_bpHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
+                                  const d = new Date(t.date);
+                                  return d >= monthStart && d <= now && resolveCategory(t) === cat;
+                                }).reduce((s, t) => s + t.amount, 0);
+                                const pct = Math.min((spent / limit) * 100, 100);
+                                const over = spent > limit;
+                                return (
+                                  <div key={cat}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                      <span style={{ fontSize: 11, color: TEXT }}>{fmtCat(cat)}</span>
+                                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: over ? RED : TEXT2 }}>{fmt(spent)} / {fmt(limit)}</span>
+                                    </div>
+                                    <div style={{ height: 5, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: `${pct}%`, background: over ? RED : pct > 80 ? YELLOW : GREEN, borderRadius: 3 }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })();
+                      default: return null;
+                    }
+                  };
+                  return (
+                    <>
+                      {_newFulls.map(key => (
+                        <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                          {renderNewWidget(key)}
+                        </DragSection>
+                      ))}
+                      {_nwRows.map((row, ri) => (
+                        <div key={`nrow-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : row.length === 2 ? '1fr 1fr' : '1fr', gap: 16, alignItems: 'stretch' }}>
+                          {row.map(key => (
+                            <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
+                              {renderNewWidget(key)}
+                            </DragSection>
+                          ))}
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
+
                 </div>
                 )}
+
+              {/* Widget Picker Modal */}
+              {showWidgetPicker && (
+                <>
+                  <div onClick={() => setShowWidgetPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} />
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 9991, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, pointerEvents: 'none' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: '#161b2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 580, maxHeight: '80vh', overflowY: 'auto', pointerEvents: 'auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: TEXT }}>Customize Overview</div>
+                        <button onClick={() => setShowWidgetPicker(false)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 2 }}>×</button>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20, lineHeight: 1.5 }}>Toggle sections on or off. Drag cards on the overview to reorder them.</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                        {OV_WIDGETS.filter(w => !w.pinned).map(w => {
+                          const on = ovEnabled.has(w.key);
+                          return (
+                            <button key={w.key} onClick={() => {
+                              const next = new Set(ovEnabled);
+                              if (next.has(w.key)) next.delete(w.key); else next.add(w.key);
+                              try { localStorage.setItem(`pl_ov_enabled_${user?.id || 'guest'}`, JSON.stringify([...next])); } catch {}
+                              setOvEnabled(next);
+                            }} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: on ? 'rgba(77,163,255,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${on ? 'rgba(77,163,255,0.3)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}>
+                              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${on ? '#0066f5' : 'rgba(255,255,255,0.15)'}`, background: on ? '#0066f5' : 'transparent', flexShrink: 0, marginTop: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {on && <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>✓</span>}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: on ? '#f1f5f9' : '#94a3b8', marginBottom: 2 }}>{w.label}</div>
+                                <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.4 }}>{w.desc}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
               </div>
               );
             })()}
@@ -8085,74 +8444,11 @@ export default function Dashboard() {
                 </div>
                 {SandboxBanner}
 
-                {/* Cash Flow Baseline */}
-                {!selectedCategory && (() => {
-                  const display = baselineData?.baseline ? baselineData : (isDemoData ? DEMO_BASELINE : null);
-                  if (!display) return null;
-                  return (
-                    <div data-tour="overview-baseline" style={{ ...CARD, marginBottom: 20 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>Cash Flow Baseline</div>
-                          <button onClick={() => openTourAt(4)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
-                        </div>
-                        {baselineData?.baseline && (
-                          <span style={{ fontSize: 11, color: TEXT3 }}>Based on {baselineData.baseline.monthsOfData} mo of history</span>
-                        )}
-                      </div>
-                      {display.isDemo && (
-                        <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>
-                          Demo data. Connect an account to see your real baseline.
-                        </div>
-                      )}
-                      <BaselineChart
-                        months={display.months}
-                        baseline={display.baseline}
-                        currentMTD={display.currentMTD}
-                        status={display.status}
-                        onRefresh={refreshBaseline}
-                        refreshing={baselineRefreshing}
-                        isDemo={!!display.isDemo}
-                      />
-                      {display.currentMTD && (() => {
-                        const { projectedNet, baseline, pctOfMonth } = display.currentMTD;
-                        const gap = Math.abs(projectedNet - baseline);
-                        const isRed  = display.status === 'red';
-                        const isWarn = display.status === 'warning';
-                        const color  = isRed ? RED : isWarn ? YELLOW : GREEN;
-                        let headline, body, cta, ctaAction;
-                        if (isRed) {
-                          headline = 'Spending is running above your baseline';
-                          body = `You're ${pctOfMonth}% through the month. At this pace your net will be ${fmt(projectedNet)}, about ${fmt(gap)} below your typical ${fmt(baseline)}.`;
-                          cta = 'Review Expenses'; ctaAction = () => setBudgetTab('spending');
-                        } else if (isWarn) {
-                          headline = 'Tracking slightly below your baseline';
-                          body = `Projected net of ${fmt(projectedNet)} vs your typical ${fmt(baseline)} — ${fmt(gap)} gap with ${100 - pctOfMonth}% of the month left.`;
-                          cta = 'Check Expenses'; ctaAction = () => setBudgetTab('spending');
-                        } else {
-                          headline = 'On track this month';
-                          body = `Projected net of ${fmt(projectedNet)}, about ${fmt(gap)} ahead of your typical ${fmt(baseline)}.`;
-                          cta = 'See Goals'; ctaAction = () => setBudgetTab('goals');
-                        }
-                        return (
-                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: BORDER, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 4 }}>{headline}</div>
-                              <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.5 }}>{body}</div>
-                            </div>
-                            <button onClick={ctaAction} style={{ flexShrink: 0, padding: '6px 14px', background: 'transparent', border: `1px solid ${color}50`, borderRadius: 8, color, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{cta} →</button>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  );
-                })()}
-
                 {/* Subtabs */}
                 {!selectedCategory && (
                   <div style={{ marginBottom: 24, borderBottom: BORDER, paddingBottom: 14, overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
                   <div data-tour="budgeting-tabs" style={{ display: 'inline-flex', gap: 6 }}>
-                    {[['income', 'Income'], ['spending', 'Expenses'], ['trends', 'Trends'], ['subscriptions', 'Subscriptions'], ['goals', 'Goals']].map(([key, label]) => (
+                    {[['income', 'Income'], ['spending', 'Expenses'], ['trends', 'Trends'], ['subscriptions', 'Subscriptions']].map(([key, label]) => (
                       <button key={key} onClick={() => setBudgetTab(key)}
                         style={{ padding: '7px 18px', borderRadius: 8, border: budgetTab === key ? `1px solid ${BLUE}` : BORDER,
                           background: budgetTab === key ? 'rgba(77,163,255,0.1)' : MUTED,
@@ -9054,6 +9350,7 @@ export default function Dashboard() {
                   const trendRows = useMockTrends
                     ? MOCK_TRENDS.map(({ cat, last, curr }) => ({ cat, last, curr }))
                     : allCats.map(cat => ({ cat: fmtCat(cat), last: lastSpend[cat] || 0, curr: thisSpend[cat] || 0 }));
+                  const barMax = Math.max(...trendRows.map(r => Math.max(r.last, r.curr)), 1);
                   return (
                     <>
                       {(useMockTrends || isDemoData) && (
@@ -9062,54 +9359,51 @@ export default function Dashboard() {
                         </div>
                       )}
                       <div className="lc" style={CARD}>
-                        <div style={{ fontWeight: 600, marginBottom: 20 }}>Spending by Category: {lastMonthLabel} vs {thisMonthLabel}</div>
-                        {isMobile ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                            {trendRows.map(({ cat, last, curr }) => {
-                              const diff = curr - last, pct = last > 0 ? ((diff / last) * 100) : null;
-                              const changeColor = diff > 0 ? RED : diff < 0 ? GREEN : TEXT2;
-                              return (
-                                <div key={cat} className="lr" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: `1px solid ${BORDER_C}` }}>
-                                  <div>
-                                    <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{cat}</div>
-                                    <div style={{ fontSize: 11, color: TEXT2, marginTop: 2, fontFamily: 'monospace' }}>{last > 0 ? fmt(last) : '—'} → {curr > 0 ? fmt(curr) : '—'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                          <div style={{ fontWeight: 600 }}>Spending by Category</div>
+                          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TEXT2 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(77,163,255,0.35)', display: 'inline-block' }} />{lastMonthLabel}
+                            </span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: TEXT2 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: 2, background: BLUE_BTN, display: 'inline-block' }} />{thisMonthLabel}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {trendRows.map(({ cat, last, curr }) => {
+                            const diff = curr - last;
+                            const pct  = last > 0 ? ((diff / last) * 100) : null;
+                            const changeColor = diff > 10 ? RED : diff < -10 ? GREEN : TEXT2;
+                            const lastW = `${(last / barMax) * 100}%`;
+                            const currW = `${(curr / barMax) * 100}%`;
+                            return (
+                              <div key={cat}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 500, color: TEXT }}>{cat}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: changeColor, fontFamily: 'monospace' }}>
+                                    {diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${fmt(Math.abs(diff))}`}
+                                    {pct !== null && <span style={{ fontSize: 10, opacity: 0.75, marginLeft: 4 }}>({pct > 0 ? '+' : ''}{pct.toFixed(0)}%)</span>}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ flex: 1, height: 8, background: MUTED, borderRadius: 4, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: lastW, background: 'rgba(77,163,255,0.35)', borderRadius: 4, transition: 'width 0.4s ease' }} />
+                                    </div>
+                                    <span style={{ fontSize: 11, color: TEXT2, fontFamily: 'monospace', minWidth: 58, textAlign: 'right' }}>{last > 0 ? fmt(last) : '—'}</span>
                                   </div>
-                                  <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: changeColor, fontFamily: 'monospace' }}>{diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${fmt(Math.abs(diff))}`}</div>
-                                    {pct !== null && <div style={{ fontSize: 11, color: changeColor, opacity: 0.8 }}>{pct > 0 ? '+' : ''}{pct.toFixed(0)}%</div>}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ flex: 1, height: 8, background: MUTED, borderRadius: 4, overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', width: currW, background: BLUE_BTN, borderRadius: 4, transition: 'width 0.4s ease' }} />
+                                    </div>
+                                    <span style={{ fontSize: 11, color: TEXT, fontFamily: 'monospace', fontWeight: 600, minWidth: 58, textAlign: 'right' }}>{curr > 0 ? fmt(curr) : '—'}</span>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                              <tr style={{ borderBottom: BORDER }}>
-                                {['Category', lastMonthLabel, thisMonthLabel, 'Change'].map((h, idx) => (
-                                  <th key={h} style={{ padding: '8px 12px', textAlign: idx === 0 ? 'left' : 'right', fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {trendRows.map(({ cat, last, curr }) => {
-                                const diff = curr - last, pct = last > 0 ? ((diff / last) * 100) : null;
-                                const changeColor = diff > 0 ? RED : diff < 0 ? GREEN : TEXT2;
-                                return (
-                                  <tr key={cat} className="lr" style={{ borderBottom: `1px solid ${BORDER_C}` }}>
-                                    <td style={{ padding: '11px 12px', fontWeight: 500, fontSize: 13 }}>{cat}</td>
-                                    <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: TEXT2 }}>{last > 0 ? fmt(last) : '—'}</td>
-                                    <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13 }}>{curr > 0 ? fmt(curr) : '—'}</td>
-                                    <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, fontWeight: 600, color: changeColor }}>
-                                      <div>{diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${fmt(Math.abs(diff))}`}</div>
-                                      {pct !== null && <div style={{ fontSize: 11, opacity: 0.7 }}>({pct > 0 ? '+' : ''}{pct.toFixed(0)}%)</div>}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </>
                   );
@@ -9334,7 +9628,7 @@ export default function Dashboard() {
                   );
                 })()}
 
-                {budgetTab === 'goals' && (() => {
+                {false && (() => {
                   const PRESET_GOALS = [
                     { name: 'Recruiting Season Fund', target: 1500,  icon: '★',  desc: 'Suit, flights, hotels for interviews' },
                     { name: 'Emergency Fund',         target: 1000,  icon: '🛡️', desc: '1 month of living expenses' },
@@ -11565,7 +11859,10 @@ export default function Dashboard() {
                               onDrop={e => { e.preventDefault(); const [, srcId] = e.dataTransfer.getData('text/plain').split('|||'); if (srcId !== s.category) handleReorder('learn-tabs', _LN_DEF)(srcId, s.category); }}
                               onClick={() => { setLearnCategory(s.category); setLearnExpanded(new Set()); }}
                               style={{ padding: '8px 20px', flexShrink: 0, whiteSpace: 'nowrap', textAlign: 'center', borderRadius: 8, border: learnCategory === s.category ? `1px solid ${s.color}` : BORDER, background: learnCategory === s.category ? `${s.color}18` : MUTED, color: learnCategory === s.category ? s.color : TEXT2, fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.15s' }}>
-                              {s.label}
+                              <span>{s.label}</span>
+                              {s.category === 'analyst' && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: '#a78bfa', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 4, padding: '1px 5px', marginLeft: 5, letterSpacing: '0.3px', verticalAlign: 'middle' }}>Advanced</span>
+                              )}
                             </button>
                           );
                         })}

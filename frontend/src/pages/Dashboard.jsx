@@ -40,7 +40,7 @@ const RED      = 'var(--red,   #ef4444)';
 const GREEN    = 'var(--green, #4ade80)';
 const YELLOW   = '#fbbf24';
 
-const CARD = { background: CARD_BG, border: BORDER, borderRadius: 10, padding: 16 };
+const CARD = { background: CARD_BG, border: BORDER, borderRadius: 10, padding: 12 };
 
 function ConnectedAccountsCard({ onFixConnection }) {
   const [accounts, setAccounts] = useState([]);
@@ -136,7 +136,6 @@ const PANEL_SUBTABS = {
     { key: 'banking',      label: 'Banking' },
     { key: 'budgeting',    label: 'Budgeting' },
     { key: 'taxes',        label: 'Taxes' },
-    { key: 'scholarship',  label: 'Scholarship' },
   ],
   insights: [
     { key: 'markets', label: 'Markets' },
@@ -2477,7 +2476,7 @@ function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder) {
     if (sec === 'chart' && baselineStep) sortedOvSteps.push(baselineStep);
   });
   if (baselineStep && !ovSorted.includes('chart')) sortedOvSteps.push(baselineStep);
-  const cfSecs = ['banking', 'budgeting', 'taxes', 'scholarship'];
+  const cfSecs = ['banking', 'budgeting', 'taxes'];
   const cfSorted = [...(cfOrder || cfSecs), ...cfSecs.filter(t => !(cfOrder || cfSecs).includes(t))];
   const inSecs = ['markets', 'news', 'signals', 'options'];
   const inSorted = [...(inOrder || inSecs), ...inSecs.filter(t => !(inOrder || inSecs).includes(t))];
@@ -4119,7 +4118,7 @@ export default function Dashboard() {
       return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))];
     };
     const ovOrd  = getOrd('overview',       ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
-    const cfOrd  = getOrd('cashflow-tabs',  ['banking', 'budgeting', 'taxes', 'scholarship']);
+    const cfOrd  = getOrd('cashflow-tabs',  ['banking', 'budgeting', 'taxes']);
     const inOrd  = getOrd('insights-tabs',  ['markets', 'news', 'signals', 'options']);
     const navOrd = getOrd('nav-order',      ['overview', 'cashflow', 'investments', 'insights', 'learn']);
     const sorted = buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd);
@@ -7598,7 +7597,7 @@ export default function Dashboard() {
                         const _reviewKeyInner = `pl_review_seen_${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}_${user?.id}`;
                         const _reviewSeenInner = !!localStorage.getItem(_reviewKeyInner);
                         return (
-                          <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+                          <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isDemoData ? 8 : 10 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <div style={{ fontSize: 12, fontWeight: 700 }}>Monthly Savings Rate</div>
@@ -8305,7 +8304,7 @@ export default function Dashboard() {
                           );
                         }
                         return (
-                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'stretch', marginBottom: 16 }}>
+                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, alignItems: 'stretch', marginBottom: 10 }}>
                             {row.keys.map(key => (
                               <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                                 {renderWidget(key)}
@@ -8328,13 +8327,13 @@ export default function Dashboard() {
 
             {/* ── CASH FLOW ─────────────────────────────── */}
             {panel === 'cashflow' && (() => {
-              const _CF_DEF = ['banking', 'budgeting', 'taxes', 'scholarship'];
+              const _CF_DEF = ['banking', 'budgeting', 'taxes'];
               const _cfOrder = getOrder('cashflow-tabs', _CF_DEF);
               return (
                 <div data-tour="cashflow-tab-bar" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, position: 'sticky', top: 0, zIndex: 10, background: BG, paddingTop: 4, paddingBottom: 12, marginTop: -4 }}>
                   <div style={{ display: 'flex', gap: 2, background: DARK, borderRadius: 9, padding: 3, width: 'fit-content' }}>
                     {_cfOrder.filter(v => !isSubtabHidden('cashflow', v)).map(v => {
-                      const l = { banking: 'Banking', budgeting: 'Budgeting', taxes: 'Taxes', scholarship: 'Scholarship' }[v];
+                      const l = { banking: 'Banking', budgeting: 'Budgeting', taxes: 'Taxes' }[v];
                       if (!l) return null;
                       return (
                         <button key={v}
@@ -10853,8 +10852,7 @@ export default function Dashboard() {
               );
             })()}
 
-            {/* ── SCHOLARSHIP HEALTH ────────────────────── */}
-            {panel === 'cashflow' && cashFlowTab === 'scholarship' && (() => {
+            {false && (() => {
               const GRADE_POINTS = { 'A':4.0,'A-':3.7,'B+':3.3,'B':3.0,'B-':2.7,'C+':2.3,'C':2.0,'C-':1.7,'D':1.0,'F':0.0,'W':null };
               const GRADE_OPTIONS = ['A','A-','B+','B','B-','C+','C','C-','D','F','W'];
               const TUITION       = 5000;

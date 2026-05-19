@@ -708,6 +708,8 @@ function PieDonut({ slices, size = 140, onSliceClick }) {
 
 // Simple SVG line chart
 function NetWorthChart({ snapshots }) {
+  const [period, setPeriod] = useState(30);
+
   if (!snapshots || snapshots.length === 0) {
     return (
       <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXT2, fontSize: 13 }}>
@@ -715,34 +717,36 @@ function NetWorthChart({ snapshots }) {
       </div>
     );
   }
-  if (snapshots.length === 1) {
+
+  const filtered = snapshots.slice(-Math.min(period, snapshots.length));
+
+  if (filtered.length === 1) {
     return (
       <div style={{ padding: '16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: TEXT2, fontSize: 13 }}>Started today. Chart builds up over time.</span>
-        <span style={{ fontWeight: 700, fontSize: 18, fontFamily: 'monospace' }}>{fmt(snapshots[0].value)}</span>
+        <span style={{ fontWeight: 700, fontSize: 18, fontFamily: 'monospace' }}>{fmt(filtered[0].value)}</span>
       </div>
     );
   }
 
-  const W = 600, H = 140, PAD = { top: 16, right: 16, bottom: 28, left: 64 };
+  const W = 600, H = 140, PAD = { top: 24, right: 16, bottom: 28, left: 64 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
-  const values = snapshots.map(s => s.value);
+  const values = filtered.map(s => s.value);
   const minV = Math.min(...values);
   const maxV = Math.max(...values);
   const range = maxV - minV || 1;
 
-  const toX = (i) => PAD.left + (i / (snapshots.length - 1)) * innerW;
+  const toX = (i) => PAD.left + (i / (filtered.length - 1)) * innerW;
   const toY = (v) => PAD.top + innerH - ((v - minV) / range) * innerH;
 
-  const points = snapshots.map((s, i) => `${toX(i)},${toY(s.value)}`).join(' ');
-  const areaPoints = `${PAD.left},${PAD.top + innerH} ${points} ${toX(snapshots.length - 1)},${PAD.top + innerH}`;
+  const points = filtered.map((s, i) => `${toX(i)},${toY(s.value)}`).join(' ');
+  const areaPoints = `${PAD.left},${PAD.top + innerH} ${points} ${toX(filtered.length - 1)},${PAD.top + innerH}`;
 
-  // Pick a few evenly-spaced x-axis labels
-  const labelCount = Math.min(snapshots.length, 6);
+  const labelCount = Math.min(filtered.length, 5);
   const labelIdxs = Array.from({ length: labelCount }, (_, i) =>
-    Math.round((i / (labelCount - 1)) * (snapshots.length - 1))
+    Math.round((i / (labelCount - 1)) * (filtered.length - 1))
   );
 
   const latest = values[values.length - 1];
@@ -750,18 +754,36 @@ function NetWorthChart({ snapshots }) {
   const gain   = latest - first;
   const gainColor = gain >= 0 ? GREEN : RED;
 
+  // Peak annotation
+  const peakIdx = values.indexOf(Math.max(...values));
+  const peakX = toX(peakIdx);
+  const peakY = toY(values[peakIdx]);
+  const peakVal = values[peakIdx];
+  const peakDate = new Date(filtered[peakIdx].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const showPeak = peakIdx !== filtered.length - 1; // don't annotate if peak is also the last point
+
+  const PERIODS = [{ label: '7D', days: 7 }, { label: '30D', days: 30 }, { label: '90D', days: 90 }];
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-        <span style={{ fontSize: 13, color: TEXT2 }}>
-          {snapshots.length < 7 ? `${snapshots.length} day${snapshots.length !== 1 ? 's' : ''}, builds up over time` : `Last ${snapshots.length} days`}
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: gainColor, fontFamily: 'monospace' }}>
           {gain >= 0 ? '+' : ''}{fmt(gain)}
+          <span style={{ fontSize: 11, color: TEXT3, fontWeight: 400, marginLeft: 6 }}>this period</span>
         </span>
+        <div style={{ display: 'flex', gap: 2, background: DARK, borderRadius: 7, padding: 2 }}>
+          {PERIODS.map(p => (
+            <button key={p.days} onClick={() => setPeriod(p.days)}
+              style={{ padding: '3px 10px', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                background: period === p.days ? CARD_BG : 'transparent',
+                color: period === p.days ? TEXT : TEXT3,
+                boxShadow: period === p.days ? '0 1px 3px rgba(0,0,0,0.3)' : 'none' }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-        {/* Y-axis labels */}
         {[0, 0.5, 1].map(t => {
           const v = minV + t * range;
           const y = toY(v);
@@ -774,21 +796,21 @@ function NetWorthChart({ snapshots }) {
             </g>
           );
         })}
-
-        {/* Area fill */}
         <polygon points={areaPoints} fill={BLUE_BTN} fillOpacity={0.08} />
-
-        {/* Line */}
         <polyline points={points} fill="none" stroke={BLUE} strokeWidth={2} strokeLinejoin="round" />
-
-        {/* Dots at endpoints */}
         <circle cx={toX(0)} cy={toY(values[0])} r={3} fill={BLUE} />
-        <circle cx={toX(snapshots.length - 1)} cy={toY(values[values.length - 1])} r={4} fill={BLUE} />
-
-        {/* X-axis labels */}
+        <circle cx={toX(filtered.length - 1)} cy={toY(values[values.length - 1])} r={4} fill={BLUE} />
+        {showPeak && (
+          <g>
+            <circle cx={peakX} cy={peakY} r={5} fill={BLUE} stroke={CARD_BG} strokeWidth={2} />
+            <rect x={peakX - 38} y={peakY - 32} width={76} height={26} rx={5} fill={DARK} opacity={0.92} />
+            <text x={peakX} y={peakY - 21} textAnchor="middle" fontSize={10} fontWeight="700" fill={BLUE}>{fmt(peakVal)}</text>
+            <text x={peakX} y={peakY - 10} textAnchor="middle" fontSize={9} fill={TEXT3}>{peakDate}</text>
+          </g>
+        )}
         {labelIdxs.map(i => (
           <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={10} fill={TEXT3}>
-            {new Date(snapshots[i].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(filtered[i].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </text>
         ))}
       </svg>
@@ -4697,6 +4719,7 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 14, color: TEXT, overflow: 'hidden' }}>
+      <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }`}</style>
 
       {/* ── TOAST ──────────────────────────────────────── */}
       {toast && (
@@ -6740,17 +6763,36 @@ export default function Dashboard() {
                       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
                       const mIncome = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
+                      if (mIncome === 0) {
+                        // No income detected: show spending-only card with CTA
+                        return (
+                          <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div>
+                                <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Month-to-Date Spending</div>
+                                <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color: TEXT, marginBottom: 4 }}>{fmt(activeMonthlySpend)}</div>
+                                <div style={{ fontSize: 12, color: TEXT2 }}>Set budget limits to track against a goal</div>
+                              </div>
+                              <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
+                                style={{ padding: '7px 14px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                Set Limits
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
                       freeToSpend = mIncome - activeMonthlySpend;
-                      subtitle = mIncome > 0 ? `${fmt(activeMonthlySpend)} spent of ${fmt(mIncome)} income` : 'Set budget limits in Expenses for a precise view';
+                      subtitle = `${fmt(activeMonthlySpend)} spent of ${fmt(mIncome)} earned`;
                     }
                   }
                   const isPositive = freeToSpend >= 0;
                   const color = isPositive ? GREEN : RED;
+                  const label = Object.values(budgetLimits).reduce((s, v) => s + v, 0) > 0 ? 'Free to Spend' : 'Cash Flow';
                   return (
                     <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
+                          <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>{label}</div>
                           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
                             {isPositive ? '' : '−'}{fmt(Math.abs(freeToSpend))}
                           </div>
@@ -8689,10 +8731,10 @@ export default function Dashboard() {
                                 const cats = activeCats;
                                 return cats.map((b, i) => {
                                   const limit     = demoBudgetLimits[b.category];
-                                  const pct       = limit ? Math.min((b.total / limit) * 100, 100) : null;
-                                  const over      = limit && b.total > limit;
-                                  const warn      = limit && pct >= 80 && !over;
-                                  const barColor  = over ? RED : warn ? YELLOW : BLUE_BTN;
+                                  const pct       = limit ? Math.min((b.total / limit) * 100, 110) : null;
+                                  const over      = limit && pct >= 90;
+                                  const warn      = limit && pct >= 75 && !over;
+                                  const barColor  = over ? RED : warn ? '#BA7517' : BLUE_BTN;
                                   const isEditing = editingLimit === b.category;
                                   const saveDemoLimit = (val) => {
                                     const v = parseFloat(val);
@@ -8734,18 +8776,18 @@ export default function Dashboard() {
                                         </div>
                                       </div>
                                       <div style={{ height: 6, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
-                                        <div style={{ height: '100%', width: `${pct !== null ? pct : Math.min((b.total / (cats[0]?.total || 1)) * 100, 100)}%`, background: barColor, borderRadius: 3, transition: 'width 0.3s ease' }} />
+                                        <div style={{ height: '100%', width: `${Math.min(pct !== null ? pct : Math.min((b.total / (cats[0]?.total || 1)) * 100, 100), 100)}%`, background: barColor, borderRadius: 3, transformOrigin: 'left', animation: `pl-bar-grow 0.7s ease forwards` }} />
                                       </div>
-                                      {over && <div style={{ fontSize: 11, color: RED, marginTop: 4 }}>Over budget by {fmt(b.total - limit)}</div>}
+                                      {over && <div style={{ fontSize: 11, color: RED, marginTop: 4 }}>⚠ Over budget by {fmt(b.total - (limit || 0))}</div>}
                                     </div>
                                   );
                                 });
                               })() : displayBudget.map((b, i) => {
                                 const limit    = budgetLimits[b.category];
-                                const pct      = limit ? Math.min((b.total / limit) * 100, 100) : null;
-                                const over     = limit && b.total > limit;
-                                const warn     = limit && pct >= 80 && !over;
-                                const barColor = over ? RED : warn ? YELLOW : BLUE_BTN;
+                                const pct      = limit ? Math.min((b.total / limit) * 100, 110) : null;
+                                const over     = limit && pct >= 90;
+                                const warn     = limit && pct >= 75 && !over;
+                                const barColor = over ? RED : warn ? '#BA7517' : BLUE_BTN;
                                 const isEditing = editingLimit === b.category;
                                 return (
                                   <div key={i} style={{ marginBottom: 20 }}>
@@ -8837,9 +8879,9 @@ export default function Dashboard() {
                                       </div>
                                     </div>
                                     <div style={{ height: 6, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
-                                      <div style={{ height: '100%', width: `${pct !== null ? pct : Math.min((b.total / (displayBudget[0]?.total || 1)) * 100, 100)}%`, background: barColor, borderRadius: 3, transition: 'width 0.3s ease' }} />
+                                      <div style={{ height: '100%', width: `${Math.min(pct !== null ? pct : Math.min((b.total / (displayBudget[0]?.total || 1)) * 100, 100), 100)}%`, background: barColor, borderRadius: 3, transformOrigin: 'left', animation: `pl-bar-grow 0.7s ease forwards` }} />
                                     </div>
-                                    {over && <div style={{ fontSize: 11, color: RED, marginTop: 4 }}>Over budget by {fmt(b.total - limit)}</div>}
+                                    {over && <div style={{ fontSize: 11, color: RED, marginTop: 4 }}>⚠ Over budget by {fmt(b.total - (limit || 0))}</div>}
                                     {catAvg[b.category] != null && !isDemoData && (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                                         <span style={{ fontSize: 11, color: TEXT3 }}>3mo avg: {fmt(catAvg[b.category])}</span>
@@ -8907,6 +8949,43 @@ export default function Dashboard() {
                           );
                         })()}
                       </div>
+
+                      {/* ── Credit Card Payments ── */}
+                      {!isDemoData && (() => {
+                        const now = new Date();
+                        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const ccPayments = activeTxns.filter(t => {
+                          if (t.amount <= 0 || new Date(t.date) < monthStart) return false;
+                          const primary = (t.personal_finance_category?.primary || '').toUpperCase();
+                          if (primary === 'LOAN_PAYMENTS') return true;
+                          const legacyCats = (t.category || []).map(c => c.toLowerCase());
+                          if (legacyCats.includes('payment') && (legacyCats.includes('credit card') || legacyCats.includes('credit'))) return true;
+                          const name = (t.merchant_name || t.name || '').toLowerCase();
+                          return /\b(credit card payment|card payment)\b/i.test(name);
+                        });
+                        if (ccPayments.length === 0) return null;
+                        const total = ccPayments.reduce((s, t) => s + t.amount, 0);
+                        return (
+                          <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${BORDER_C}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Credit Card Payments</div>
+                                <div style={{ fontSize: 11, color: TEXT3, marginTop: 2 }}>Excluded from spending total to avoid double-counting</div>
+                              </div>
+                              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace', color: TEXT2 }}>{fmt(total)}</div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {ccPayments.slice(0, 5).map((t, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${BORDER_C}` }}>
+                                  <div style={{ fontSize: 12, color: TEXT2 }}>{t.merchant_name || t.name}</div>
+                                  <div style={{ fontSize: 12, fontFamily: 'monospace', color: TEXT2 }}>{fmt(t.amount)}</div>
+                                </div>
+                              ))}
+                              {ccPayments.length > 5 && <div style={{ fontSize: 11, color: TEXT3 }}>+{ccPayments.length - 5} more</div>}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

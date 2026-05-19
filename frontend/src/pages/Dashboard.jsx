@@ -733,6 +733,14 @@ function NetWorthChart({ snapshots }) {
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
+  const fmtY = (v) => {
+    const sign = v < 0 ? '-' : '';
+    const abs = Math.abs(v);
+    if (abs >= 10000) return `${sign}$${Math.round(abs / 1000)}k`;
+    if (abs >= 1000)  return `${sign}$${(abs / 1000).toFixed(1)}k`;
+    return `${sign}$${Math.round(abs)}`;
+  };
+
   const values = filtered.map(s => s.value);
   const minV = Math.min(...values);
   const maxV = Math.max(...values);
@@ -798,7 +806,7 @@ function NetWorthChart({ snapshots }) {
             <g key={t}>
               <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke={BORDER_C} strokeWidth={1} />
               <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={10} fill={TEXT3}>
-                {v < 0 ? `-$${(Math.abs(v) / 1000).toFixed(0)}k` : `$${(v / 1000).toFixed(0)}k`}
+                {fmtY(v)}
               </text>
             </g>
           );
@@ -6805,7 +6813,7 @@ export default function Dashboard() {
                   const color = isPositive ? GREEN : RED;
                   return (
                     <div className="lc" style={{ ...CARD, marginBottom: 16, borderColor: isPositive ? `${GREEN}50` : `${RED}50` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                         <div>
                           <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
                           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1.5px', color, marginBottom: 4 }}>
@@ -6817,6 +6825,21 @@ export default function Dashboard() {
                           <div style={{ fontSize: 22, marginBottom: 2 }}>{isPositive ? '✓' : '⚠'}</div>
                           <div style={{ color }}>{isPositive ? 'On track' : 'Over budget'}</div>
                         </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: TEXT3, marginBottom: 12, lineHeight: 1.5 }}>
+                        {isPositive
+                          ? `Your budget limits minus what you've spent in those categories this month. Only spending in categories with a limit counts.`
+                          : `You've spent more than your combined limits this month. Review your categories to see where.`}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => { setPanel('cashflow'); setBudgetTab('spending'); }}
+                          style={{ flex: 1, padding: '7px 0', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 7, color: BLUE, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                          Budgeting
+                        </button>
+                        <button onClick={() => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }}
+                          style={{ flex: 1, padding: '7px 0', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Expenses
+                        </button>
                       </div>
                     </div>
                   );

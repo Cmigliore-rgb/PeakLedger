@@ -457,6 +457,7 @@ const LOGO_OVERRIDES = {
   'peak ledger':  '/logo.png',
   'uga':          'https://www.uga.edu/favicon.ico',
   'university of georgia': 'https://www.uga.edu/favicon.ico',
+  'university of ge': 'https://www.uga.edu/favicon.ico',
 };
 
 function logoUrls(name, ticker, logoUrl) {
@@ -8361,13 +8362,11 @@ export default function Dashboard() {
                   if (!hasRealExp) {
                     displayBudget = [];
                   } else if (selectedExpenseMonth === 0) {
-                    if (Object.keys(txnCategoryOverrides).length > 0) {
+                    {
                       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       const ct = {};
                       activeTxns.filter(t => t.amount > 0 && !isTransfer(t) && new Date(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
                       displayBudget = Object.entries(ct).map(([category, total]) => ({ category, total: Math.round(total * 100) / 100 })).sort((a, b) => b.total - a.total);
-                    } else {
-                      displayBudget = activeBudget;
                     }
                   } else {
                     const catTotals = {};

@@ -3695,6 +3695,8 @@ export default function Dashboard() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [syncingBank, setSyncingBank]       = useState(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [lastSynced, setLastSynced]         = useState(null);
+  const [toast, setToast]                   = useState(null);
   useEffect(() => {
     const handle = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handle);
@@ -4280,6 +4282,7 @@ export default function Dashboard() {
       }
     } finally {
       setLoading(false);
+      setLastSynced(new Date());
     }
   }, []);
 
@@ -4783,7 +4786,7 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 14, color: TEXT, overflow: 'hidden' }}>
-      <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }`}</style>
+      <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } } @keyframes pl-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
       {/* ── TOAST ──────────────────────────────────────── */}
       {toast && (
@@ -7713,8 +7716,15 @@ export default function Dashboard() {
                             <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.5px', color: a.closed ? TEXT3 : TEXT, marginBottom: 14 }}>
                               {a.closed ? '—' : fmt(a.balances?.current)}
                             </div>
-                            {/* Row 5: view link */}
-                            <div style={{ fontSize: 12, color: BLUE, fontWeight: 600 }}>View transactions →</div>
+                            {/* Row 5: view link + live indicator */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ fontSize: 12, color: BLUE, fontWeight: 600 }}>View transactions →</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block', boxShadow: '0 0 0 2px rgba(74,222,128,0.25)' }} />
+                                <span style={{ fontSize: 10, color: '#4ade80', fontWeight: 600 }}>Live</span>
+                                {lastSynced && <span style={{ fontSize: 10, color: TEXT3 }}>· {Math.round((Date.now() - lastSynced) / 60000) < 1 ? 'just now' : `${Math.round((Date.now() - lastSynced) / 60000)}m ago`}</span>}
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -19984,11 +19994,26 @@ export default function Dashboard() {
       )}
 
 
+        <div style={{ padding: '20px 24px 12px', textAlign: 'center', fontSize: 11, color: '#888', letterSpacing: '0.3px', flexShrink: 0 }}>
+          256-bit encrypted · Powered by Plaid · Your data is never sold
+        </div>
       </main>
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10, background: '#1a2e1a', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 10, padding: '12px 18px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', animation: 'pl-toast-in 0.3s ease' }}>
+          <span style={{ fontSize: 18 }}>✅</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#4ade80' }}>{toast}</span>
+        </div>
+      )}
 
       {showConnectModal && (
         <ConnectAccountModal
-          onSuccess={(name) => { setSyncingBank(name); fetchAll().finally(() => setSyncingBank(null)); }}
+          onSuccess={(name) => {
+            setSyncingBank(name);
+            setToast(`${name} connected successfully`);
+            setTimeout(() => setToast(null), 3000);
+            fetchAll().finally(() => setSyncingBank(null));
+          }}
           onClose={() => setShowConnectModal(false)}
         />
       )}

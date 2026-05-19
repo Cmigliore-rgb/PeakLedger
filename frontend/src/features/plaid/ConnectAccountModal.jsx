@@ -122,6 +122,13 @@ export default function ConnectAccountModal({ onSuccess, onClose }) {
             <a href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank" rel="noreferrer" style={{ color: BLUE, textDecoration: 'none' }}>Plaid's Privacy Policy</a>.
           </div>
 
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'rgba(55,138,221,0.08)', border: '1px solid rgba(55,138,221,0.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 20 }}>
+            <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>🔒</span>
+            <span style={{ fontSize: 12, color: '#93c5fd', lineHeight: 1.55 }}>
+              Read-only access — PeakLedger can never move your money. Bank-level 256-bit encryption.
+            </span>
+          </div>
+
           {error && (
             <div style={{ fontSize: 12, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
               {error}

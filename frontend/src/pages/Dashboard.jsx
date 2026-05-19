@@ -731,7 +731,7 @@ function NetWorthChart({ snapshots }) {
     );
   }
 
-  const W = 600, H = 140, PAD = { top: 24, right: 16, bottom: 28, left: 76 };
+  const W = 600, H = 110, PAD = { top: 20, right: 16, bottom: 26, left: 76 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
@@ -978,7 +978,7 @@ const SNAPSHOT_ARTICLES = [
 ];
 
 function BaselineChart({ months, baseline, currentMTD, status, onRefresh, refreshing, isDemo }) {
-  const W = 620, H = 180, PAD = { top: 20, right: 16, bottom: 32, left: 68 };
+  const W = 620, H = 140, PAD = { top: 16, right: 16, bottom: 28, left: 68 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
@@ -6050,18 +6050,22 @@ export default function Dashboard() {
         const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lmEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-        const mTxns  = transactions.filter(t => { const d = new Date(t.date); return d >= mStart && d <= now; });
-        const lmTxns = transactions.filter(t => { const d = new Date(t.date); return d >= lmStart && d <= lmEnd; });
-        const mInc  = mTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
-        const mExp  = mTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
+        const mTxns  = activeTxns.filter(t => { const d = new Date(t.date); return d >= mStart && d <= now; });
+        const lmTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= lmStart && d <= lmEnd; });
+        const _mrHasCCAccts = activeAccounts.some(a => a.type === 'credit');
+        const INCOME_CATS_MR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
+        const isIncMR = t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_MR].some(k => cat.includes(k)); };
+        const isExpMR = t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_mrHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; };
+        const mInc  = mTxns.filter(isIncMR).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const mExp  = mTxns.filter(isExpMR).reduce((s, t) => s + t.amount, 0);
         const mSave = mInc - mExp;
         const mRate = mInc > 0 ? Math.round((mSave / mInc) * 100) : null;
-        const lmInc = lmTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
-        const lmExp = lmTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
+        const lmInc = lmTxns.filter(isIncMR).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const lmExp = lmTxns.filter(isExpMR).reduce((s, t) => s + t.amount, 0);
         const incChg = lmInc > 0 ? Math.round(((mInc - lmInc) / lmInc) * 100) : null;
         const expChg = lmExp > 0 ? Math.round(((mExp - lmExp) / lmExp) * 100) : null;
         const catMap = {};
-        mTxns.filter(t => t.amount > 0 && !isTransfer(t)).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
+        mTxns.filter(isExpMR).forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
         const topCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
         const rateColor = mRate === null ? TEXT2 : mRate >= 20 ? GREEN : mRate >= 0 ? YELLOW : RED;
         const completedGoals = (goals || []).filter(g => { const a = accounts.find(ac => ac.account_id === g.accountId); return a && a.balances?.current >= g.target; });
@@ -6644,12 +6648,24 @@ export default function Dashboard() {
               const _ovReorder = handleReorder('overview', _OV_DEF);
               const _ovCustom = !!layoutOrder['overview'];
               const _noAccounts = !isDemoData && activeAccounts.length === 0;
+              const _reviewKey = `pl_review_seen_${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}_${user?.id}`;
+              const _reviewSeen = !!localStorage.getItem(_reviewKey);
               return (
               <div>
+                {!_reviewSeen && !isDemoData && (
+                  <style>{`@keyframes pl-pulse-review { 0%,100%{box-shadow:0 0 0 0 rgba(77,163,255,0.5)} 50%{box-shadow:0 0 0 6px rgba(77,163,255,0)} }`}</style>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24 }}>
                   <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{_g}, {_n}</h1>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    {!isDemoData && <button onClick={() => setShowMonthlyReview(true)} style={{ background: 'none', border: 'none', color: BLUE, fontSize: 12, cursor: 'pointer', fontWeight: 600, padding: 0 }}>{new Date().toLocaleDateString('en-US', { month: 'long' })} Review</button>}
+                    {!isDemoData && (
+                      <button
+                        onClick={() => { setShowMonthlyReview(true); localStorage.setItem(_reviewKey, '1'); }}
+                        style={{ background: _reviewSeen ? 'none' : 'rgba(77,163,255,0.12)', border: _reviewSeen ? 'none' : '1px solid rgba(77,163,255,0.4)', borderRadius: 6, color: BLUE, fontSize: 12, cursor: 'pointer', fontWeight: 600, padding: _reviewSeen ? 0 : '4px 10px', animation: _reviewSeen ? 'none' : 'pl-pulse-review 1.8s ease-in-out infinite' }}
+                      >
+                        {new Date().toLocaleDateString('en-US', { month: 'long' })} Review
+                      </button>
+                    )}
                     {_ovCustom && <button onClick={() => resetLayout('overview')} style={{ background: 'none', border: 'none', color: TEXT3, fontSize: 11, cursor: 'pointer', padding: 0 }}>Reset layout</button>}
                   </div>
                 </div>
@@ -6814,6 +6830,7 @@ export default function Dashboard() {
                 </div>{/* overview-snapshot */}
                 </DragSection>
 
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 0, alignItems: 'start' }}>
                 <DragSection id="free-to-spend" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 {(() => {
                   const now = new Date();
@@ -6915,29 +6932,41 @@ export default function Dashboard() {
                   const rateColor = rate === null ? TEXT2 : rate >= 20 ? GREEN : rate >= 10 ? YELLOW : rate >= 0 ? TEXT : RED;
                   const TARGET = 20;
                   return (
-                    <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 24 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div data-tour="overview-savings-rate" style={{ ...CARD, marginBottom: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: isDemoData ? 8 : 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>Monthly Savings Rate</div>
-                          <button onClick={() => openTourAt(2)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
+                          <div style={{ fontSize: 12, fontWeight: 700 }}>Monthly Savings Rate</div>
+                          <button onClick={() => openTourAt(2)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', color: TEXT3, fontSize: 9, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                          <span style={{ fontSize: 24, fontWeight: 800, color: rateColor, letterSpacing: '-1px' }}>{rate !== null ? `${rate}%` : '—'}</span>
-                          <span style={{ fontSize: 11, color: TEXT2 }}>{now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-                        </div>
+                        <div style={{ fontSize: 11, color: TEXT2 }}>{now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
                       </div>
                       {isDemoData && (
-                        <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '5px 10px', marginBottom: 10, display: 'inline-block' }}>
-                          Demo data. Connect an account to see your real savings rate.
+                        <div style={{ fontSize: 10, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '4px 10px', marginBottom: 10, display: 'inline-block' }}>
+                          Demo data — connect to see real savings rate.
                         </div>
                       )}
-                      <div style={{ fontSize: 12, color: TEXT2, marginBottom: 10 }}>
-                        {fmt(monthIncome)} income · {fmt(monthSpending)} spent · {saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`} saved
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                        <div style={{ flexShrink: 0 }}>
+                          <div style={{ fontSize: 9, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Rate</div>
+                          <div style={{ fontSize: 30, fontWeight: 800, color: rateColor, letterSpacing: '-1.5px', lineHeight: 1 }}>{rate !== null ? `${rate}%` : '—'}</div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, paddingTop: 2 }}>
+                          {[
+                            { label: 'Income',   value: fmt(monthIncome),  color: GREEN },
+                            { label: 'Spending', value: fmt(monthSpending), color: RED   },
+                            { label: 'Saved',    value: saved >= 0 ? fmt(saved) : `−${fmt(Math.abs(saved))}`, color: saved >= 0 ? GREEN : RED },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} style={{ minWidth: 0, overflow: 'hidden' }}>
+                              <div style={{ fontSize: 9, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div style={{ background: MUTED, borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                      <div style={{ background: MUTED, borderRadius: 4, height: 5, overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(Math.max(rate ?? 0, 0), 100)}%`, height: '100%', background: rateColor, borderRadius: 4, transition: 'width 0.6s ease' }} />
                       </div>
-                      <div style={{ position: 'relative', marginTop: 5, fontSize: 11, color: TEXT3, height: 14 }}>
+                      <div style={{ position: 'relative', marginTop: 4, fontSize: 10, color: TEXT3, height: 13 }}>
                         <span style={{ position: 'absolute', left: 0 }}>0%</span>
                         <span style={{ position: 'absolute', left: `${TARGET}%`, transform: 'translateX(-50%)', color: rate !== null && rate >= TARGET ? GREEN : TEXT3 }}>{TARGET}% target</span>
                         <span style={{ position: 'absolute', right: 0 }}>100%</span>
@@ -6946,7 +6975,9 @@ export default function Dashboard() {
                   );
                 })()}
                 </DragSection>
+                </div>{/* end free-to-spend + savings-rate row */}
 
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 0, alignItems: 'start' }}>
                 <DragSection id="chart" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div data-tour="overview-networth-chart" style={{ ...CARD, marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -7074,6 +7105,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 </DragSection>
+                </div>{/* end chart + goals row */}
 
                 <DragSection id="txns" panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '3fr 2fr', gap: 16 }}>

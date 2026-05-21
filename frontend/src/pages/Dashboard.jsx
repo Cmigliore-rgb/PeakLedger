@@ -6847,9 +6847,9 @@ export default function Dashboard() {
                 })()}
 
                 {/* ── Onboarding Checklist ── */}
-                {isPremium && !isDemoData && !onboardingDismissed && (() => {
+                {isPremium && !onboardingDismissed && (() => {
                   const items = [
-                    { id: 'account', label: 'Connect a bank account',  done: activeAccounts.length > 0,             action: () => setShowConnectModal(true),                                              cta: 'Connect' },
+                    { id: 'account', label: 'Connect a bank account',  done: !isDemoData,                           action: () => setShowConnectModal(true),                                              cta: 'Connect' },
                     { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }, cta: 'Set limits' },
                     { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setPanel('goals'); setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }, cta: 'Add goal' },
                   ];
@@ -8395,7 +8395,7 @@ export default function Dashboard() {
                           );
                         }
                         return (
-                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, alignItems: 'stretch', marginBottom: 10 }}>
+                          <div key={`pair-${ri}`} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, alignItems: 'stretch', marginBottom: 10, order: _ovOrder.indexOf(row.keys[0]) }}>
                             {row.keys.map(key => (
                               <DragSection key={key} id={key} panel="overview" order={_ovOrder} onReorder={_ovReorder}>
                                 {renderWidget(key)}
@@ -12604,7 +12604,7 @@ export default function Dashboard() {
                     {section?.items.map(item => {
                       const expanded = learnExpanded.has(item.id);
                       return (
-                        <div key={item.id} className="lc" style={{ ...CARD, cursor: 'pointer', transition: 'all 0.2s', padding: expanded ? 12 : '10px 12px' }}
+                        <div key={item.id} className="lc" style={{ ...CARD, cursor: 'pointer', transition: 'all 0.2s', padding: expanded ? 12 : '10px 12px', height: '100%', boxSizing: 'border-box' }}
                           onClick={() => toggleExpand(item.id)}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

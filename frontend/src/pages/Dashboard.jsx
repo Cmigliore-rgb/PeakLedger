@@ -2476,8 +2476,8 @@ function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder, includeBase
   const ovSorted = [...(ovOrder || allOvSecs).filter(k => k in ovStepsBySec), ...allOvSecs.filter(k => !(ovOrder || allOvSecs).includes(k) && k in ovStepsBySec)];
   const sortedOvSteps = [];
   ovSorted.forEach(sec => {
-    sortedOvSteps.push(ovStepsBySec[sec]);
     if (sec === 'chart' && baselineStep && includeBaseline) sortedOvSteps.push(baselineStep);
+    sortedOvSteps.push(ovStepsBySec[sec]);
   });
   if (baselineStep && includeBaseline && !ovSorted.includes('chart')) sortedOvSteps.push(baselineStep);
   const cfSecs = ['banking', 'budgeting', 'taxes'];

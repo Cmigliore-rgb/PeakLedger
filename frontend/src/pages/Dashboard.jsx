@@ -10533,6 +10533,16 @@ export default function Dashboard() {
 
             {/* ── GOALS ────────────────────────────────── */}
             {panel === 'goals' && (() => {
+              const PRESET_GOALS = [
+                { name: 'Emergency Fund',         target: 1000,  icon: '🛡️', desc: '1 month of living expenses' },
+                { name: 'Spring Break',           target: 600,   icon: '✈️', desc: 'Travel and lodging' },
+                { name: 'Laptop Upgrade',         target: 1200,  icon: '💻', desc: 'New machine for senior year' },
+                { name: 'Recruiting Season Fund', target: 1500,  icon: '★',  desc: 'Suit, flights, hotels for interviews' },
+                { name: 'Pay Off Credit Card',    target: 5000,  icon: '💳', desc: 'Clear high-interest debt' },
+                { name: 'New Car',                target: 8000,  icon: '🚗', desc: 'Solid used car fund' },
+                { name: 'House Down Payment',     target: 50000, icon: '🏠', desc: '20% down on a starter home' },
+                { name: 'Wedding Fund',           target: 20000, icon: '💍', desc: 'Average US wedding cost' },
+              ];
               const totalSaved  = goals.reduce((s, g) => {
                 const acct = accounts.find(a => a.account_id === g.accountId);
                 return s + (acct ? (acct.balances?.current || 0) : 0);
@@ -10644,13 +10654,29 @@ export default function Dashboard() {
                     </div>
                   )}
 
+                  {/* Quick Start Templates — shown when no goals yet */}
+                  {goals.length === 0 && !showGoalForm && (
+                    <div style={{ marginBottom: 24 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 12 }}>Quick Start Templates</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 8 }}>
+                        {PRESET_GOALS.map(p => (
+                          <button key={p.name}
+                            onClick={() => { setGoalForm({ name: p.name, target: String(p.target), accountId: '' }); setEditingGoal(null); setShowGoalForm(true); }}
+                            style={{ padding: '11px 10px', background: DARK, border: BORDER, borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = BLUE}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = BORDER_C}>
+                            <div style={{ fontSize: 18, marginBottom: 5 }}>{p.icon}</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, marginBottom: 2 }}>{p.name}</div>
+                            <div style={{ fontSize: 10, color: TEXT3 }}>{fmt(p.target)} · {p.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Goal cards */}
                   {goals.length === 0 && !showGoalForm ? (
-                    <div style={{ ...CARD, textAlign: 'center', padding: 48, color: TEXT2 }}>
-                      <div style={{ fontSize: 28, marginBottom: 12 }}>◎</div>
-                      <div style={{ fontWeight: 600, marginBottom: 6, color: TEXT }}>No goals yet</div>
-                      <div style={{ fontSize: 13 }}>Create a goal to track your progress toward a savings target.</div>
-                    </div>
+                    <div style={{ fontSize: 13, color: TEXT3, paddingTop: 4 }}>Or use the button above to create a custom goal.</div>
                   ) : (
                     <div data-tour="goals-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                       {goals.map(goal => {

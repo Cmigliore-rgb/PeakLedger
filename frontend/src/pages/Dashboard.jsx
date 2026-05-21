@@ -1013,9 +1013,16 @@ function BaselineChart({ months, baseline, currentMTD, status, onRefresh, refres
 
   const maxAbs = Math.max(Math.abs(lo), Math.abs(hi));
   const fmtYVal = v => {
-    if (maxAbs >= 1000) return `${v >= 0 ? '+' : ''}${(v / 1000).toFixed(0)}k`;
+    if (maxAbs >= 1000) {
+      const kVal = v / 1000;
+      const precision = span < 4000 ? 1 : 0;
+      const str = kVal.toFixed(precision);
+      if (parseFloat(str) === 0) return '0k';
+      return `${kVal >= 0 ? '+' : ''}${str}k`;
+    }
     const rounded = Math.round(v);
-    return `${rounded >= 0 ? '+' : '-'}$${Math.abs(rounded)}`;
+    if (rounded === 0) return '0';
+    return `${rounded > 0 ? '+' : '-'}$${Math.abs(rounded)}`;
   };
 
   const netPts = months.map((m, i) => `${toX(i)},${toY(m.net)}`).join(' ');
@@ -6840,7 +6847,7 @@ export default function Dashboard() {
                 })()}
 
                 {/* ── Onboarding Checklist ── */}
-                {!_noAccounts && !isDemoData && !onboardingDismissed && (() => {
+                {isPremium && !isDemoData && !onboardingDismissed && (() => {
                   const items = [
                     { id: 'account', label: 'Connect a bank account',  done: activeAccounts.length > 0,             action: () => setShowConnectModal(true),                                              cta: 'Connect' },
                     { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }, cta: 'Set limits' },
@@ -12593,11 +12600,11 @@ export default function Dashboard() {
                   {learnCategory === 'analyst' && isPremium && <YieldCurveChart yieldCurve={yieldCurve} />}
 
                   {/* Cards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: g2, gap: 16, alignItems: 'start', ...(learnCategory === 'analyst' && !isPremium ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : {}) }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: g2, gap: 12, alignItems: 'stretch', ...(learnCategory === 'analyst' && !isPremium ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : {}) }}>
                     {section?.items.map(item => {
                       const expanded = learnExpanded.has(item.id);
                       return (
-                        <div key={item.id} className="lc" style={{ ...CARD, cursor: 'pointer', transition: 'all 0.2s', ...(!expanded ? { minHeight: 112 } : {}) }}
+                        <div key={item.id} className="lc" style={{ ...CARD, cursor: 'pointer', transition: 'all 0.2s', padding: expanded ? 12 : '10px 12px' }}
                           onClick={() => toggleExpand(item.id)}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

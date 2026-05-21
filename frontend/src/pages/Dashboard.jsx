@@ -153,6 +153,7 @@ const OV_WIDGETS = [
   { key: 'stats',               label: 'Net Worth Stats',         size: 'full',  pinned: true,  defaultOn: true,  desc: 'Net worth, total assets and liabilities' },
   { key: 'free-to-spend',       label: 'Free to Spend',           size: 'half',  pinned: false, defaultOn: true,  desc: 'Budget remaining for this month' },
   { key: 'savings-rate',        label: 'Monthly Savings Rate',    size: 'half',  pinned: false, defaultOn: true,  desc: 'How much of your income you saved' },
+  { key: 'cash-flow-baseline',  label: 'Cash Flow Baseline',      size: 'full',  pinned: false, defaultOn: true,  desc: 'Spending vs your historical average' },
   { key: 'chart',               label: 'Net Worth History',       size: 'full',  pinned: false, defaultOn: true,  desc: 'Net worth over time' },
   { key: 'goals',               label: 'Savings Goals',           size: 'half',  pinned: false, defaultOn: false, desc: 'Track progress toward financial goals' },
   { key: 'txns',                label: 'Recent Transactions',     size: 'half',  pinned: false, defaultOn: false, desc: 'Latest spending activity' },
@@ -163,7 +164,6 @@ const OV_WIDGETS = [
   { key: 'subscriptions',       label: 'Subscriptions',           size: 'half',  pinned: false, defaultOn: false, desc: 'Recurring charges detected this month' },
   { key: 'investment-snapshot', label: 'Investment Snapshot',     size: 'half',  pinned: false, defaultOn: false, desc: 'Portfolio value and top holdings' },
   { key: 'debt-summary',        label: 'Debt Summary',            size: 'half',  pinned: false, defaultOn: false, desc: 'Total debt and upcoming payments' },
-  { key: 'cash-flow-baseline',  label: 'Cash Flow Baseline',      size: 'full',  pinned: false, defaultOn: true,  desc: 'Spending vs your historical average' },
   { key: 'budget-progress',     label: 'Budget Progress',         size: 'half',  pinned: false, defaultOn: false, desc: 'Category limits and spending so far' },
 ];
 const OV_WIDGETS_MAP = Object.fromEntries(OV_WIDGETS.map(w => [w.key, w]));
@@ -6858,7 +6858,7 @@ export default function Dashboard() {
                   const items = [
                     { id: 'account', label: 'Connect a bank account',  done: activeAccounts.length > 0,             action: () => setShowConnectModal(true),                                              cta: 'Connect' },
                     { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }, cta: 'Set limits' },
-                    { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }, cta: 'Add goal' },
+                    { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setPanel('goals'); setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }, cta: 'Add goal' },
                   ];
                   const doneCount = items.filter(i => i.done).length;
                   if (doneCount === items.length) return null;
@@ -9949,6 +9949,26 @@ export default function Dashboard() {
                                   </div>
                                 );
                               })}
+                              {/* Orphaned limits: categories hidden from spend view but still have a limit set */}
+                              {(() => {
+                                const shownCats = new Set(displayBudget.map(b => b.category));
+                                const orphaned = Object.entries(budgetLimits).filter(([cat]) => !shownCats.has(cat));
+                                if (!orphaned.length) return null;
+                                return (
+                                  <div style={{ marginTop: 8, paddingTop: 12, borderTop: `1px solid ${BORDER_C}` }}>
+                                    <div style={{ fontSize: 11, color: TEXT3, marginBottom: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Hidden limits (excluded from spending view)</div>
+                                    {orphaned.map(([cat, limit]) => (
+                                      <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <span style={{ fontSize: 13, color: TEXT2 }}>{fmtCat(cat)}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <span style={{ fontSize: 12, color: TEXT3, fontFamily: 'monospace' }}>{fmt(limit)}/mo</span>
+                                          <button onClick={() => saveLimit(cat, '')} style={{ padding: '3px 10px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 6, color: RED, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Remove</button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </>
                           );
                         })()}

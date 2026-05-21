@@ -163,7 +163,7 @@ const OV_WIDGETS = [
   { key: 'subscriptions',       label: 'Subscriptions',           size: 'half',  pinned: false, defaultOn: false, desc: 'Recurring charges detected this month' },
   { key: 'investment-snapshot', label: 'Investment Snapshot',     size: 'half',  pinned: false, defaultOn: false, desc: 'Portfolio value and top holdings' },
   { key: 'debt-summary',        label: 'Debt Summary',            size: 'half',  pinned: false, defaultOn: false, desc: 'Total debt and upcoming payments' },
-  { key: 'cash-flow-baseline',  label: 'Cash Flow Baseline',      size: 'full',  pinned: false, defaultOn: false, desc: 'Spending vs your historical average' },
+  { key: 'cash-flow-baseline',  label: 'Cash Flow Baseline',      size: 'full',  pinned: false, defaultOn: true,  desc: 'Spending vs your historical average' },
   { key: 'budget-progress',     label: 'Budget Progress',         size: 'half',  pinned: false, defaultOn: false, desc: 'Category limits and spending so far' },
 ];
 const OV_WIDGETS_MAP = Object.fromEntries(OV_WIDGETS.map(w => [w.key, w]));
@@ -3489,6 +3489,9 @@ export default function Dashboard() {
   const [connectBannerDismissed, setConnectBannerDismissed] = useState(
     () => localStorage.getItem('pl_connect_banner_dismissed') === '1'
   );
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => { try { return localStorage.getItem(`pl_onboarding_dismissed_${user?.id}`) === '1'; } catch { return false; } }
+  );
   const [ovEnabled, setOvEnabled] = useState(() => {
     try {
       const saved = localStorage.getItem(`pl_ov_enabled_${user?.id || 'guest'}`);
@@ -6798,15 +6801,94 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {!_noAccounts && (
-                  <AIInsightCard
-                    isDemoData={showDemoAI}
-                    demoKey="overview"
-                    onGetAdvice={canSeeAI ? () => getAdvice('overview') : undefined}
-                    loading={adviceState.overview?.loading}
-                    text={adviceState.overview?.text}
-                  />
-                )}
+                {/* ── Recurring Bills Due Soon ── */}
+                {!_noAccounts && !isDemoData && (() => {
+                  const NON_SUB_OV = new Set(['GAS_STATIONS','GROCERIES','TRANSFER_IN','TRANSFER_OUT','CREDIT_CARD_PAYMENT','LOAN_PAYMENTS']);
+                  const today = new Date();
+                  const groups = {};
+                  activeTxns.filter(t => {
+                    if (t.amount <= 0 || isTransfer(t)) return false;
+                    if (NON_SUB_OV.has(resolveCategory(t))) return false;
+                    if (GAS_RE.test(t.merchant_name || t.name || '')) return false;
+                    if (GROCERY_RE.test(t.merchant_name || t.name || '')) return false;
+                    return true;
+                  }).forEach(t => {
+                    const key = (t.merchant_name || t.name || '').toLowerCase().trim();
+                    if (!key) return;
+                    if (!groups[key]) groups[key] = { name: t.merchant_name || t.name, txns: [] };
+                    groups[key].txns.push(t);
+                  });
+                  const billsDue = [];
+                  Object.values(groups).forEach(({ name, txns }) => {
+                    if (txns.length < 2) return;
+                    const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                    const amounts = sorted.map(t => t.amount);
+                    const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+                    if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
+                    const gaps = [];
+                    for (let i = 1; i < sorted.length; i++) gaps.push((new Date(sorted[i].date) - new Date(sorted[i-1].date)) / 86400000);
+                    const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+                    if (gaps.some(g => Math.abs(g - avgGap) > avgGap * 0.5)) return;
+                    if (!((avgGap>=5&&avgGap<=9)||(avgGap>=12&&avgGap<=18)||(avgGap>=26&&avgGap<=40)||(avgGap>=85&&avgGap<=100)||(avgGap>=340&&avgGap<=390))) return;
+                    const last = new Date(sorted[sorted.length-1].date + 'T12:00:00');
+                    const next = new Date(last.getTime() + avgGap * 86400000);
+                    const daysUntil = Math.round((next - today) / 86400000);
+                    if (daysUntil >= 0 && daysUntil <= 7) billsDue.push({ name, avgAmt, daysUntil, next });
+                  });
+                  if (billsDue.length === 0) return null;
+                  billsDue.sort((a, b) => a.daysUntil - b.daysUntil);
+                  const totalDue = billsDue.reduce((s, b) => s + b.avgAmt, 0);
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.25)', borderLeft: '3px solid #fbbf24', borderRadius: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: YELLOW, flexShrink: 0 }}>Bills due (7d): {fmt(totalDue)}</span>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                        {billsDue.slice(0, 4).map((b, i) => (
+                          <span key={i} style={{ fontSize: 11, color: TEXT2, background: MUTED, borderRadius: 12, padding: '3px 8px', whiteSpace: 'nowrap' }}>
+                            {b.name} {fmt(b.avgAmt)} · {b.daysUntil === 0 ? 'today' : b.daysUntil === 1 ? 'tomorrow' : `in ${b.daysUntil}d`}
+                          </span>
+                        ))}
+                        {billsDue.length > 4 && <span style={{ fontSize: 11, color: TEXT3, padding: '3px 0' }}>+{billsDue.length - 4} more</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Onboarding Checklist ── */}
+                {!_noAccounts && !isDemoData && !onboardingDismissed && (() => {
+                  const items = [
+                    { id: 'account', label: 'Connect a bank account',  done: activeAccounts.length > 0,             action: () => setShowConnectModal(true),                                              cta: 'Connect' },
+                    { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }, cta: 'Set limits' },
+                    { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }, cta: 'Add goal' },
+                  ];
+                  const doneCount = items.filter(i => i.done).length;
+                  if (doneCount === items.length) return null;
+                  return (
+                    <div className="lc" style={{ ...CARD, marginBottom: 12, position: 'relative' }}>
+                      <button onClick={() => { setOnboardingDismissed(true); try { localStorage.setItem(`pl_onboarding_dismissed_${user?.id}`, '1'); } catch {} }}
+                        style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 2 }}>×</button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>Get started</div>
+                        <div style={{ fontSize: 11, color: TEXT3 }}>{doneCount}/{items.length} complete</div>
+                        <div style={{ flex: 1, height: 4, background: MUTED, borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${(doneCount / items.length) * 100}%`, background: BLUE_BTN, borderRadius: 2, transition: 'width 0.4s ease' }} />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {items.map(item => (
+                          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 18, height: 18, borderRadius: '50%', border: item.done ? 'none' : `2px solid ${BORDER_C}`, background: item.done ? GREEN : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {item.done && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            </div>
+                            <span style={{ flex: 1, fontSize: 12, color: item.done ? TEXT3 : TEXT, textDecoration: item.done ? 'line-through' : 'none' }}>{item.label}</span>
+                            {!item.done && (
+                              <button onClick={item.action} style={{ padding: '3px 10px', background: 'rgba(77,163,255,0.1)', border: '1px solid rgba(77,163,255,0.25)', borderRadius: 6, color: BLUE, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{item.cta} →</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {_noAccounts ? (
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px 48px', textAlign:'center' }}>

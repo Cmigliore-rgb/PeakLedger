@@ -160,8 +160,6 @@ const OV_WIDGETS = [
   { key: 'calendar',            label: 'Spending Calendar',       size: 'full',  pinned: false, defaultOn: false, desc: 'Monthly calendar with bills and events' },
   { key: 'market-alerts',       label: 'Market Alerts',           size: 'half',  pinned: false, defaultOn: false, desc: 'Financial news and market headlines' },
   { key: 'top-spending',        label: 'Top Spending Categories', size: 'half',  pinned: false, defaultOn: false, desc: 'Where your money went this month' },
-  { key: 'account-balances',    label: 'Account Balances',        size: 'half',  pinned: false, defaultOn: false, desc: 'Current balance for each linked account' },
-  { key: 'subscriptions',       label: 'Subscriptions',           size: 'half',  pinned: false, defaultOn: false, desc: 'Recurring charges detected this month' },
   { key: 'investment-snapshot', label: 'Investment Snapshot',     size: 'half',  pinned: false, defaultOn: false, desc: 'Portfolio value and top holdings' },
   { key: 'debt-summary',        label: 'Debt Summary',            size: 'half',  pinned: false, defaultOn: false, desc: 'Total debt and upcoming payments' },
   { key: 'budget-progress',     label: 'Budget Progress',         size: 'half',  pinned: false, defaultOn: false, desc: 'Category limits and spending so far' },
@@ -8250,8 +8248,8 @@ export default function Dashboard() {
                       })();
                       case 'investment-snapshot': return (() => {
                         const investAccts = activeAccounts.filter(a => a.type === 'investment');
-                        const portValue = holdings.reduce((s, h) => s + (h.institution_value || (h.quantity * (h.security?.close_price || 0)) || 0), 0);
-                        const topHoldings = [...holdings].sort((a, b) => (b.institution_value || 0) - (a.institution_value || 0)).slice(0, 5);
+                        const portValue = activeHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
+                        const topHoldings = [...activeHoldings].sort((a, b) => ((b.quantity || 0) * (b.institution_price || 0)) - ((a.quantity || 0) * (a.institution_price || 0))).slice(0, 5);
                         if (investAccts.length === 0 && !isDemoData) return (
                           <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
                             <div style={{ fontWeight: 600, marginBottom: 8 }}>Investment Snapshot</div>
@@ -8268,7 +8266,7 @@ export default function Dashboard() {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                                 {topHoldings.map(h => {
                                   const sym = h.security?.ticker_symbol || h.security?.name || 'Unknown';
-                                  const val = h.institution_value || (h.quantity * (h.security?.close_price || 0));
+                                  const val = (h.quantity || 0) * (h.institution_price || 0);
                                   const pct = portValue > 0 ? ((val / portValue) * 100).toFixed(1) : 0;
                                   return (
                                     <div key={h.security_id || sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER_C}` }}>
@@ -8322,8 +8320,11 @@ export default function Dashboard() {
                         if (!display) return null;
                         return (
                           <div data-tour="overview-baseline" style={{ ...CARD, marginBottom: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-                              <div style={{ fontWeight: 700, fontSize: 15 }}>Cash Flow Baseline</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div style={{ fontWeight: 700, fontSize: 15 }}>Cash Flow Baseline</div>
+                                <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === BASELINE_TOUR_SEL); openTourAt(idx !== -1 ? idx : 0); }} title="Learn about this widget" style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, flexShrink: 0 }}>?</button>
+                              </div>
                               {baselineData?.baseline && <span style={{ fontSize: 11, color: TEXT3 }}>Based on {baselineData.baseline.monthsOfData} mo of history</span>}
                             </div>
                             {display.isDemo && <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>Demo data. Connect an account to see your real baseline.</div>}

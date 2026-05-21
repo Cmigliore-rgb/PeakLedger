@@ -1024,6 +1024,7 @@ function BaselineChart({ months, baseline, currentMTD, status, onRefresh, refres
 
   const statusColor = status === 'red' ? '#f87171' : status === 'warning' ? '#fbbf24' : '#4ade80';
   const statusLabel = status === 'red' ? 'Below Baseline' : status === 'warning' ? 'Trending Low' : 'On Track';
+  const statusDesc  = status === 'red' ? 'Your cash flow this month is well below your historical average. Expenses may be elevated or income is down.' : status === 'warning' ? 'Your cash flow is slightly below your typical range. Worth watching as the month continues.' : 'Your cash flow is tracking at or above your historical average. Good month so far.';
 
   const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const labelStep = months.length <= 6 ? 1 : months.length <= 9 ? 2 : 3;
@@ -1052,6 +1053,7 @@ function BaselineChart({ months, baseline, currentMTD, status, onRefresh, refres
           </button>
         )}
       </div>
+      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.55, marginBottom: 10 }}>{statusDesc}</div>
 
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
         {/* Zero line */}
@@ -2241,19 +2243,22 @@ const FINANCE_TOUR_STEPS = [
   { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Your Financial Snapshot',
     body: 'The top row shows your net worth (assets minus liabilities), total cash across all accounts, and total portfolio value. These three numbers are the foundation of your financial picture and update in real time once your accounts are connected.' },
+  { sel: '[data-tour="overview-free-to-spend"]',   panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Free to Spend',
+    body: 'Shows how much budget you have remaining this month across the categories where you have set spending limits. Green means you are within budget; red means you have gone over. Set limits in the Budgeting tab and this card updates automatically as you spend.' },
   { sel: '[data-tour="overview-savings-rate"]',    panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Monthly Savings Rate',
     body: 'This card tracks what percentage of your income you kept this month, measured against the 20% target. The bar fills green when you hit the target and shows spending pace context so you can see at a glance whether your month is trending well or running tight.' },
+  { sel: '[data-tour="overview-baseline"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Cash Flow Baseline',
+    body: 'PeakLedger pulls up to 13 months of transaction history to build a personal spending baseline, adjusted for seasonal patterns. The chart compares your actual cash flow each month against that baseline so you can see immediately when a month runs high or low.' },
   { sel: '[data-tour="overview-networth-chart"]',  panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Net Worth History',
     body: 'This chart tracks your net worth month over month, showing assets minus liabilities over time. Watching the line trend upward consistently is one of the clearest signals that your finances are moving in the right direction.' },
-  { sel: '[data-tour="overview-baseline"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
-    title: 'Cash Flow Baseline',
-    body: 'PeakLedger pulls up to 13 months of transaction history to build a personal spending baseline, adjusted for seasonal patterns. The chart compares your actual spending each month against that baseline so you can see immediately when a month runs high or low.' },
-  { sel: '[data-tour="overview-txns"]',            panel: 'overview',                              side: 'top',     extraSels: _OV,
+  { sel: '[data-tour="overview-txns"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Recent Transactions',
     body: 'Every purchase and deposit flowing through linked accounts shows here with merchant name, category, and amount. Green means income, red means expense. This feed is the raw data behind your budget analysis and spending insights.' },
-  { sel: '[data-tour="overview-calendar"]',        panel: 'overview',                              side: 'top',     extraSels: _OV,
+  { sel: '[data-tour="overview-calendar"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Financial Calendar',
     body: 'The calendar shows all your upcoming bills and payment due dates pulled directly from your connected liability accounts, plus any custom reminders you add. Liability due dates repeat every month automatically so you never lose track of what is coming.' },
   { sel: '[data-tour="banking-accounts"]',         panel: 'cashflow',   tab: 'banking',            side: 'bottom',  extraSels: _CF_B,
@@ -2310,19 +2315,22 @@ const STUDENT_TOUR_STEPS = [
   { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Your Financial Snapshot',
     body: 'The top row shows net worth (assets minus liabilities), total cash across all accounts, and total portfolio value. Net worth is the foundational number in personal finance and the one most tied to long-term wealth building.' },
+  { sel: '[data-tour="overview-free-to-spend"]',   panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Free to Spend',
+    body: 'Shows how much budget remains this month across categories where you have set spending limits. Set limits in the Budgeting tab and this card updates automatically as you spend. A useful habit builder for students learning to stay within a monthly plan.' },
   { sel: '[data-tour="overview-savings-rate"]',    panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Monthly Savings Rate',
     body: 'The savings rate card tracks what percentage of income was kept this month against the 20% benchmark. The 20% rule comes from the 50/30/20 framework: 50% needs, 30% wants, 20% savings. Students can use this card to practice building the savings habit before their income grows.' },
+  { sel: '[data-tour="overview-baseline"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Cash Flow Baseline',
+    body: 'PeakLedger analyzes up to 13 months of transaction history to build a personal spending baseline adjusted for seasonal patterns. The chart shows whether each month ran above or below your norm, useful for spotting months with irregular expenses like textbooks or travel.' },
   { sel: '[data-tour="overview-networth-chart"]',  panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Net Worth History',
     body: 'This chart tracks your net worth month over month. Even small positive trends compound significantly over time. If it is trending up, your financial habits are working. If it is flat or declining, something in your cash flow needs attention.' },
-  { sel: '[data-tour="overview-baseline"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
-    title: 'Cash Flow Baseline',
-    body: 'PeakLedger analyzes up to 13 months of transaction history to build a personal spending baseline adjusted for seasonal patterns. The chart shows whether each month ran above or below your norm, which is useful for spotting months that had irregular expenses like textbooks or travel.' },
-  { sel: '[data-tour="overview-txns"]',            panel: 'overview',                              side: 'top',     extraSels: _OV,
+  { sel: '[data-tour="overview-txns"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Recent Transactions',
     body: 'Every transaction flowing through linked accounts appears here with merchant, category, and amount. Green means income, red means expense. This is the raw data that powers all your budget analysis and course assignments.' },
-  { sel: '[data-tour="overview-calendar"]',        panel: 'overview',                              side: 'top',     extraSels: _OV,
+  { sel: '[data-tour="overview-calendar"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Financial Calendar',
     body: 'The calendar shows upcoming bills and payment due dates pulled from your connected liability accounts, along with any reminders you add manually. Due dates repeat every month automatically. It is a useful way to plan around cash-tight weeks before rent or loan payments hit.' },
   { sel: '[data-tour="banking-accounts"]',         panel: 'cashflow',   tab: 'banking',            side: 'bottom',  extraSels: _CF_B,
@@ -2342,9 +2350,6 @@ const STUDENT_TOUR_STEPS = [
   { sel: '[data-tour="taxes-inputs"]',             panel: 'cashflow',   tab: 'taxes',               side: 'bottom',  extraSels: _CF_T,
     title: 'Tax Estimator',
     body: 'Enter your gross income, 401(k) contributions, and deduction type. PeakLedger shows your federal tax broken down bracket by bracket with your effective and marginal rates. Try adjusting income to model a part-time job, a raise, or financial aid taxability.' },
-  { sel: '[data-tour="scholarship-status"]',       panel: 'cashflow',   tab: 'scholarship',         side: 'bottom',  selBottom: '[data-tour="scholarship-stats"]', extraSels: _CF_SCH,
-    title: 'Scholarship Health',
-    body: 'The Scholarship tab tracks HOPE and Zell Miller eligibility in real time. Enter your current GPA, credit hours, and this semester\'s courses with expected grades. PeakLedger projects your HOPE GPA, flags whether your award is safe or at risk, and shows you the minimum grade needed in each class to stay eligible.' },
   { sel: '[data-tour="investments-holdings"]',     panel: 'investments',                             side: 'bottom',  extraSels: _INV,
     title: 'Investments',
     body: 'The portfolio view shows every holding with its current price, quantity, total value, and unrealized gain or loss. The sector allocation chart helps you spot concentration risk. The Portfolio Simulator lets you build hypothetical allocations and stress-test them, which is directly useful for the investing unit in your course.' },
@@ -2379,19 +2384,22 @@ const PROFESSOR_TOUR_STEPS = [
   { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Financial Snapshot',
     body: 'The top row shows net worth (assets minus liabilities), total cash, and total portfolio value. These are the three numbers that define the balance sheet: what you own, what you owe, and the difference. Students with linked accounts see real numbers; demo mode shows a realistic sample.' },
+  { sel: '[data-tour="overview-free-to-spend"]',   panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Free to Spend',
+    body: 'Shows how much budget remains across spending limit categories this month. Students set limits per category in the Budgeting tab; this card reflects actual spending in real time. A direct, practical application of the 50/30/20 budgeting framework taught in your course.' },
   { sel: '[data-tour="overview-savings-rate"]',    panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Monthly Savings Rate',
     body: 'This card shows what percentage of income was kept this month against a 20% target based on the 50/30/20 rule. Tracking savings rate is one of the most practical habits students can build early: even a small consistent rate invested over time has a large compounding effect.' },
+  { sel: '[data-tour="overview-baseline"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Cash Flow Baseline',
+    body: 'PeakLedger analyzes up to 13 months of transaction history to build a personal spending baseline adjusted for seasonality. The chart compares actual cash flow each month against that baseline, giving students a quantitative framework for identifying irregular expense months.' },
   { sel: '[data-tour="overview-networth-chart"]',  panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Net Worth History',
     body: 'This chart tracks net worth month over month, plotting assets minus liabilities over time. It makes the abstract concept of balance sheet growth concrete and observable. Students with linked accounts see their real trajectory; demo mode shows a realistic sample.' },
-  { sel: '[data-tour="overview-baseline"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
-    title: 'Cash Flow Baseline',
-    body: 'PeakLedger analyzes up to 13 months of transaction history to build a personal spending baseline adjusted for seasonality. The chart compares actual spending each month against that baseline, which gives students a quantitative framework for identifying irregular expense months.' },
-  { sel: '[data-tour="overview-txns"]',            panel: 'overview',                              side: 'top',     extraSels: _OV,
+  { sel: '[data-tour="overview-txns"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Transaction Feed',
     body: 'Every transaction shows up here with merchant name, category, and amount. This is the raw data behind all budget and spending analysis. Real accounts and demo data both work identically, so students who opt not to connect personal accounts can still complete all transaction-based work.' },
-  { sel: '[data-tour="overview-calendar"]',        panel: 'overview',                              side: 'top',     extraSels: _OV,
+  { sel: '[data-tour="overview-calendar"]',        panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Financial Calendar',
     body: 'The calendar pulls payment due dates from connected liability accounts and surfaces them as recurring monthly events, alongside any custom reminders. It reinforces cash flow timing concepts and helps students see the difference between when income arrives and when obligations are due.' },
   { sel: '[data-tour="banking-accounts"]',         panel: 'cashflow',   tab: 'banking',            side: 'bottom',  extraSels: _CF_B,
@@ -2411,9 +2419,6 @@ const PROFESSOR_TOUR_STEPS = [
   { sel: '[data-tour="taxes-inputs"]',             panel: 'cashflow',   tab: 'taxes',               side: 'bottom',  extraSels: _CF_T,
     title: 'Tax Estimator',
     body: 'Students enter gross income, 401(k) contributions, and deduction type to see their federal tax broken down bracket by bracket. Effective rate, marginal rate, and total liability are all shown. Adjusting income in real time demonstrates progressive taxation and covers the tax planning unit directly.' },
-  { sel: '[data-tour="scholarship-status"]',       panel: 'cashflow',   tab: 'scholarship',         side: 'bottom',  selBottom: '[data-tour="scholarship-stats"]', extraSels: _CF_SCH,
-    title: 'Scholarship Health',
-    body: 'The Scholarship tab tracks HOPE and Zell Miller eligibility in real time. Students enter their GPA, credit hours, and current-semester courses with expected grades. The sensitivity table shows how each grade change shifts scholarship status, which connects GPA decisions to real financial consequences.' },
   { sel: '[data-tour="investments-holdings"]',     panel: 'investments',                             side: 'bottom',  extraSels: _INV,
     title: 'Investments',
     body: 'The portfolio view shows holdings with live prices, allocation by sector, and unrealized P&L. The sector allocation chart makes diversification concepts visual. The Portfolio Simulator lets students build hypothetical portfolios and review Sharpe ratios, diversification scores, and 10-year projections without any real brokerage account.' },
@@ -2439,15 +2444,16 @@ const PROFESSOR_TOUR_STEPS = [
 ];
 
 const OV_SECTION_TOUR = {
-  'stats':        '[data-tour="overview-cards"]',
-  'savings-rate': '[data-tour="overview-savings-rate"]',
-  'chart':        '[data-tour="overview-networth-chart"]',
-  'txns':         '[data-tour="overview-txns"]',
-  'calendar':     '[data-tour="overview-calendar"]',
+  'stats':         '[data-tour="overview-cards"]',
+  'free-to-spend': '[data-tour="overview-free-to-spend"]',
+  'savings-rate':  '[data-tour="overview-savings-rate"]',
+  'chart':         '[data-tour="overview-networth-chart"]',
+  'txns':          '[data-tour="overview-txns"]',
+  'calendar':      '[data-tour="overview-calendar"]',
 };
 const BASELINE_TOUR_SEL = '[data-tour="overview-baseline"]';
 
-function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder) {
+function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder, includeBaseline = true) {
   const FIXED_FIRST_SELS = new Set(['[data-tour="brand"]', '[data-tour="sidebar-nav"]']);
   const FIXED_LAST_SELS  = new Set(['[data-tour="nav-settings"]']);
 
@@ -2471,9 +2477,9 @@ function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder) {
   const sortedOvSteps = [];
   ovSorted.forEach(sec => {
     sortedOvSteps.push(ovStepsBySec[sec]);
-    if (sec === 'chart' && baselineStep) sortedOvSteps.push(baselineStep);
+    if (sec === 'chart' && baselineStep && includeBaseline) sortedOvSteps.push(baselineStep);
   });
-  if (baselineStep && !ovSorted.includes('chart')) sortedOvSteps.push(baselineStep);
+  if (baselineStep && includeBaseline && !ovSorted.includes('chart')) sortedOvSteps.push(baselineStep);
   const cfSecs = ['banking', 'budgeting', 'taxes'];
   const cfSorted = [...(cfOrder || cfSecs), ...cfSecs.filter(t => !(cfOrder || cfSecs).includes(t))];
   const inSecs = ['markets', 'news', 'signals', 'options'];
@@ -4118,30 +4124,12 @@ export default function Dashboard() {
       const ss = new Set(s);
       return [...s.filter(id => defaults.includes(id)), ...defaults.filter(id => !ss.has(id))];
     };
-    const ovOrd  = getOrd('overview',       ['stats', 'savings-rate', 'chart', 'txns', 'calendar']);
+    const ovOrd  = getOrd('overview', ['stats', 'free-to-spend', 'savings-rate', 'chart', 'txns', 'calendar']).filter(k => ovEnabled.has(k));
     const cfOrd  = getOrd('cashflow-tabs',  ['banking', 'budgeting', 'taxes']);
     const inOrd  = getOrd('insights-tabs',  ['markets', 'news', 'signals', 'options']);
     const navOrd = getOrd('nav-order',      ['overview', 'cashflow', 'investments', 'insights', 'learn']);
-    const sorted = buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd);
-    // Within each same-panel+tab group, sort by actual DOM vertical position where elements are visible
-    const out = [];
-    let si = 0;
-    while (si < sorted.length) {
-      const s0 = sorted[si];
-      const gKey = `${s0.panel}|${s0.tab ?? ''}|${s0.insightsTab ?? ''}`;
-      const group = [];
-      while (si < sorted.length && `${sorted[si].panel}|${sorted[si].tab ?? ''}|${sorted[si].insightsTab ?? ''}` === gKey) {
-        group.push(sorted[si++]);
-      }
-      if (group.length > 1) {
-        const withTop = group.map(s => ({ s, top: document.querySelector(s.sel)?.getBoundingClientRect().top ?? Infinity }));
-        if (withTop.some(w => w.top !== Infinity)) withTop.sort((a, b) => a.top - b.top);
-        out.push(...withTop.map(w => w.s));
-      } else {
-        out.push(...group);
-      }
-    }
-    return out;
+    const baselineOn = ovEnabled.has('cash-flow-baseline');
+    return buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd, baselineOn);
   };
 
   const openTourAt = (stepIndex) => {
@@ -6953,7 +6941,11 @@ export default function Dashboard() {
                     Demo data. Connect an account to see your real numbers.
                   </div>
                 )}
-                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 8 : 12, marginBottom: 16, marginTop: isDemoData ? 6 : 16, alignItems: 'start' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: isDemoData ? 6 : 16, marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: TEXT3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Financial Snapshot</span>
+                  <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === '[data-tour="overview-cards"]'); openTourAt(idx !== -1 ? idx : 0); }} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Learn about this widget">?</button>
+                </div>
+                <div data-tour="overview-cards" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : g3, gap: isMobile ? 8 : 12, marginBottom: 16, marginTop: 0, alignItems: 'start' }}>
                   {(() => {
                     const NW_CARDS = [
                       { key: 'nw',   label: 'Net Worth',         value: fmt(animNetWorth),    sub: 'Assets − Liabilities' },
@@ -7616,10 +7608,13 @@ export default function Dashboard() {
                         const isPositive = freeToSpend >= 0;
                         const color = isPositive ? GREEN : RED;
                         return (
-                          <div className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+                          <div data-tour="overview-free-to-spend" className="lc" style={{ ...CARD, marginBottom: 16, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                               <div>
-                                <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>Free to Spend</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                                  <div style={{ fontSize: 11, color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Free to Spend</div>
+                                  <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === '[data-tour="overview-free-to-spend"]'); openTourAt(idx !== -1 ? idx : 0); }} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Learn about this widget">?</button>
+                                </div>
                                 <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color, marginBottom: 4 }}>
                                   {isPositive ? '' : '−'}{fmt(Math.abs(freeToSpend))}
                                 </div>
@@ -7681,7 +7676,7 @@ export default function Dashboard() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isDemoData ? 8 : 10 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <div style={{ fontSize: 12, fontWeight: 700 }}>Monthly Savings Rate</div>
-                                <button onClick={() => openTourAt(2)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', color: TEXT3, fontSize: 9, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
+                                <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === '[data-tour="overview-savings-rate"]'); openTourAt(idx !== -1 ? idx : 0); }} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Learn about this widget">?</button>
                               </div>
                               <div style={{ fontSize: 11, color: TEXT2 }}>{now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
                             </div>
@@ -7728,7 +7723,7 @@ export default function Dashboard() {
                         <div data-tour="overview-networth-chart" style={{ ...CARD, marginBottom: 16 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                             <div style={{ fontSize: 13, fontWeight: 700 }}>Net Worth History</div>
-                            <button onClick={() => openTourAt(3)} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="What is this?">?</button>
+                            <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === '[data-tour="overview-networth-chart"]'); openTourAt(idx !== -1 ? idx : 0); }} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Learn about this widget">?</button>
                           </div>
                           {isDemoData && (
                             <div style={{ fontSize: 11, color: BLUE, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(77,163,255,0.3)', borderRadius: 6, padding: '6px 12px', marginBottom: 12, display: 'inline-block' }}>
@@ -7852,7 +7847,10 @@ export default function Dashboard() {
                       );
                       case 'txns': return (
                         <div data-tour="overview-txns" className="lc" style={{ ...CARD, marginBottom: 16, minWidth: 0, overflow: 'hidden', height: '100%', boxSizing: 'border-box' }}>
-                          <div style={{ fontWeight: 600, marginBottom: 16 }}>Recent Transactions</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                            <div style={{ fontWeight: 600 }}>Recent Transactions</div>
+                            <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === '[data-tour="overview-txns"]'); openTourAt(idx !== -1 ? idx : 0); }} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Learn about this widget">?</button>
+                          </div>
                           {transactions.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '28px 16px' }}>
                               <div style={{ fontSize: 28, marginBottom: 8 }}>↕</div>
@@ -7989,7 +7987,10 @@ export default function Dashboard() {
                         return (
                           <div data-tour="overview-calendar" className="lc" style={{ ...CARD, marginBottom: 16, padding: isMobile ? 14 : 24 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                              <div style={{ fontWeight: 600 }}>Calendar</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div style={{ fontWeight: 600 }}>Calendar</div>
+                                <button onClick={() => { const steps = getTourSteps(); const idx = steps.findIndex(s => s.sel === '[data-tour="overview-calendar"]'); openTourAt(idx !== -1 ? idx : 0); }} style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', color: TEXT3, fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Learn about this widget">?</button>
+                              </div>
                               <div style={{ display: 'flex', gap: 8 }}>
                                 <button onClick={() => setShowLinkCal(true)} style={{ padding: '5px 12px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Link Calendar</button>
                                 <button onClick={() => { setEventForm({ title: '', date: selectedDay || '', type: 'reminder', note: '' }); setEditingEvent(null); setShowEventForm(v => !v); }} style={{ padding: '5px 12px', background: BLUE_BTN, color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Event</button>

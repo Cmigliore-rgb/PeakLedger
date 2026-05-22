@@ -1060,8 +1060,6 @@ function BaselineChart({ months, baseline, currentMTD, status, onRefresh, refres
           </button>
         )}
       </div>
-      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.55, marginBottom: 10 }}>{statusDesc}</div>
-
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
         {/* Zero line */}
         {zeroY > PAD.top && zeroY < PAD.top + innerH && (
@@ -1139,6 +1137,7 @@ function BaselineChart({ months, baseline, currentMTD, status, onRefresh, refres
           <span style={{ fontSize: 10, color: '#555' }}>Below baseline</span>
         </div>
       </div>
+      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.55, marginTop: 10 }}>{statusDesc}</div>
     </div>
   );
 }
@@ -2247,6 +2246,9 @@ const FINANCE_TOUR_STEPS = [
   { sel: '[data-tour="sidebar-nav"]',              panel: 'overview',                              side: 'right',
     title: 'Your Navigation',
     body: 'The sidebar is your navigation hub. Each section in Personal Finance has its own panel: Overview, Cash Flow, Investments, Market Insights, Learn, and Settings. Click any item to switch views. The Get Premium button connects your real accounts. Take a Tour restarts this guide from wherever you are.' },
+  { sel: '[data-tour="overview-customize"]',       panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Customize Your Overview',
+    body: 'Click "+ Customize" to choose which widgets appear on your overview. Toggle cards on or off to keep your dashboard focused on what matters most to you. Once enabled, drag any card to reorder it.' },
   { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Your Financial Snapshot',
     body: 'The top row shows your net worth (assets minus liabilities), total cash across all accounts, and total portfolio value. These three numbers are the foundation of your financial picture and update in real time once your accounts are connected.' },
@@ -2319,6 +2321,9 @@ const STUDENT_TOUR_STEPS = [
   { sel: '[data-tour="sidebar-nav"]',              panel: 'overview',                              side: 'right',
     title: 'The Overview Tab',
     body: 'The sidebar is your navigation hub. Personal Finance covers accounts, spending, investments, and market data. Education is where your course modules, datasets, and assignments live. The Get Premium button at the bottom connects your real accounts at the discounted student rate.' },
+  { sel: '[data-tour="overview-customize"]',       panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Customize Your Overview',
+    body: 'Click "+ Customize" to choose which widgets appear on your overview. Toggle cards on or off to keep your dashboard focused on what matters most. Drag any card to reorder it.' },
   { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Your Financial Snapshot',
     body: 'The top row shows net worth (assets minus liabilities), total cash across all accounts, and total portfolio value. Net worth is the foundational number in personal finance and the one most tied to long-term wealth building.' },
@@ -2388,6 +2393,9 @@ const PROFESSOR_TOUR_STEPS = [
   { sel: '[data-tour="sidebar-nav"]',              panel: 'overview',                              side: 'right',
     title: 'The Overview Tab',
     body: 'The sidebar is the student\'s navigation hub. Personal Finance covers accounts, spending, investments, and market data. Education is where course modules, datasets, and assignments live. The Get Premium button connects real accounts at the student rate. In demo mode every section is pre-populated with realistic synthetic data so students can complete all work without linking personal accounts.' },
+  { sel: '[data-tour="overview-customize"]',       panel: 'overview',                              side: 'bottom',  extraSels: _OV,
+    title: 'Customize Your Overview',
+    body: 'Click "+ Customize" to choose which widgets appear on your overview. Toggle cards on or off to keep your dashboard focused on what matters most. Drag any card to reorder it.' },
   { sel: '[data-tour="overview-cards"]',            panel: 'overview',                              side: 'bottom',  extraSels: _OV,
     title: 'Financial Snapshot',
     body: 'The top row shows net worth (assets minus liabilities), total cash, and total portfolio value. These are the three numbers that define the balance sheet: what you own, what you owe, and the difference. Students with linked accounts see real numbers; demo mode shows a realistic sample.' },
@@ -3370,6 +3378,7 @@ function useCountUp(target, duration = 700) {
 
 export default function Dashboard() {
   const { user, login, logout, refreshUser, isPremium, isProfessor, isAdmin, isStudent, isUser } = useAuth();
+  const [appHidden, setAppHidden] = useState(false);
   const [panel, setPanel] = useState(() => localStorage.getItem(`pl_panel_${user?.id}`) || 'overview');
   const [accounts, setAccounts] = useState([]);
   const [isDemoData, setIsDemoData] = useState(false);
@@ -4073,6 +4082,11 @@ export default function Dashboard() {
     }
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
+  useEffect(() => {
+    const handler = () => setAppHidden(document.hidden);
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
   useEffect(() => { if (!user?.id) return; localStorage.setItem(`pl_calendar_${user.id}`, JSON.stringify(calendarEvents)); }, [calendarEvents]); // eslint-disable-line
   useEffect(() => {
     if (!user) return;
@@ -4824,6 +4838,14 @@ export default function Dashboard() {
   return (
     <div style={{ display: 'flex', height: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 14, color: TEXT, overflow: 'hidden' }}>
       <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } } @keyframes pl-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+      {/* ── PRIVACY SCREEN (mobile tab switcher) ───────── */}
+      {appHidden && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+          <img src="/logo.png" alt="PeakLedger" style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'contain' }} />
+          <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.3px' }}>PeakLedger</span>
+        </div>
+      )}
 
       {/* ── TOAST ──────────────────────────────────────── */}
       {toast && (
@@ -6732,7 +6754,7 @@ export default function Dashboard() {
                   <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{_g}, {_n}</h1>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {_ovCustom && <button onClick={() => resetLayout('overview')} style={{ background: 'none', border: 'none', color: TEXT3, fontSize: 11, cursor: 'pointer', padding: 0 }}>Reset layout</button>}
-                    <button onClick={() => setShowWidgetPicker(true)} style={{ padding: '6px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Customize</button>
+                    <button data-tour="overview-customize" onClick={() => setShowWidgetPicker(true)} style={{ padding: '6px 14px', background: MUTED, border: BORDER, borderRadius: 7, color: TEXT2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>+ Customize</button>
                   </div>
                 </div>
 
@@ -6850,7 +6872,7 @@ export default function Dashboard() {
                 {isPremium && !onboardingDismissed && (() => {
                   const items = [
                     { id: 'account', label: 'Connect a bank account',  done: !isDemoData,                           action: () => setShowConnectModal(true),                                              cta: 'Connect' },
-                    { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); }, cta: 'Set limits' },
+                    { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false); }, cta: 'Set limits' },
                     { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setPanel('goals'); setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }, cta: 'Add goal' },
                   ];
                   const doneCount = items.filter(i => i.done).length;
@@ -12600,11 +12622,11 @@ export default function Dashboard() {
                   {learnCategory === 'analyst' && isPremium && <YieldCurveChart yieldCurve={yieldCurve} />}
 
                   {/* Cards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: g2, gap: 12, alignItems: 'stretch', ...(learnCategory === 'analyst' && !isPremium ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : {}) }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: g2, gap: 12, alignItems: 'start', ...(learnCategory === 'analyst' && !isPremium ? { filter: 'blur(5px)', pointerEvents: 'none', userSelect: 'none' } : {}) }}>
                     {section?.items.map(item => {
                       const expanded = learnExpanded.has(item.id);
                       return (
-                        <div key={item.id} className="lc" style={{ ...CARD, cursor: 'pointer', transition: 'all 0.2s', padding: expanded ? 12 : '10px 12px', height: '100%', boxSizing: 'border-box' }}
+                        <div key={item.id} className="lc" style={{ ...CARD, cursor: 'pointer', transition: 'all 0.2s', padding: expanded ? 12 : '10px 12px' }}
                           onClick={() => toggleExpand(item.id)}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

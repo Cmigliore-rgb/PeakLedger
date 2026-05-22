@@ -2577,7 +2577,7 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
         const p = Math.min((now - t0) / dur, 1);
         container.scrollTop = from + dist * ease(p);
         if (p < 1) requestAnimationFrame(step);
-        else if (container) container.style.overflowY = 'hidden';
+        else { if (container) container.style.overflowY = 'hidden'; setRect(buildRect()); }
       };
       requestAnimationFrame(step);
       setRect(buildRect());
@@ -3397,7 +3397,7 @@ function DragSection({ id, panel, order, onReorder, children, handleTop = 10 }) 
         const [srcPanel, srcId] = e.dataTransfer.getData('text/plain').split('|||');
         if (srcPanel === panel && srcId !== id) onReorder(srcId, id);
       }}
-      style={{ order: order.indexOf(id), outline: over ? '2px dashed rgba(77,163,255,0.4)' : '2px solid transparent', outlineOffset: 3, borderRadius: 12, position: 'relative' }}
+      style={{ order: order.indexOf(id), outline: over ? '2px dashed rgba(77,163,255,0.4)' : '2px solid transparent', outlineOffset: 3, borderRadius: 12, position: 'relative', minWidth: 0 }}
       className="drag-section"
     >
       <div className="drag-handle" title="Drag to reorder" style={{ position: 'absolute', top: handleTop, right: 10, zIndex: 10, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'grab', color: '#555', fontSize: 13, borderRadius: 5, background: 'rgba(255,255,255,0.06)', opacity: 0, transition: 'opacity 0.15s', userSelect: 'none' }}>⠿</div>
@@ -3429,7 +3429,7 @@ function useCountUp(target, duration = 700) {
 
 export default function Dashboard() {
   const { user, login, logout, refreshUser, isPremium, isProfessor, isAdmin, isStudent, isUser } = useAuth();
-  const [appHidden, setAppHidden] = useState(false);
+  const privacyRef = useRef(null);
   const [panel, setPanel] = useState(() => localStorage.getItem(`pl_panel_${user?.id}`) || 'overview');
   const [accounts, setAccounts] = useState([]);
   const [isDemoData, setIsDemoData] = useState(false);
@@ -4134,9 +4134,17 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
   useEffect(() => {
-    const handler = () => setAppHidden(document.hidden);
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
+    const show = () => { if (privacyRef.current) privacyRef.current.style.display = 'flex'; };
+    const hide = () => { if (privacyRef.current) privacyRef.current.style.display = 'none'; };
+    const onVis = () => (document.hidden ? show : hide)();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', show);
+    window.addEventListener('pageshow', hide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', show);
+      window.removeEventListener('pageshow', hide);
+    };
   }, []);
   useEffect(() => { if (!user?.id) return; localStorage.setItem(`pl_calendar_${user.id}`, JSON.stringify(calendarEvents)); }, [calendarEvents]); // eslint-disable-line
   useEffect(() => {
@@ -4890,13 +4898,11 @@ export default function Dashboard() {
     <div style={{ display: 'flex', height: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 14, color: TEXT, overflow: 'hidden' }}>
       <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } } @keyframes pl-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-      {/* ── PRIVACY SCREEN (mobile tab switcher) ───────── */}
-      {appHidden && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-          <img src="/logo.png" alt="PeakLedger" style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'contain' }} />
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.3px' }}>PeakLedger</span>
-        </div>
-      )}
+      {/* ── PRIVACY SCREEN (tab / app-switcher) ───────── */}
+      <div ref={privacyRef} style={{ display: 'none', position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <img src="/logo.png" alt="PeakLedger" style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'contain' }} />
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.3px' }}>PeakLedger</span>
+      </div>
 
       {/* ── TOAST ──────────────────────────────────────── */}
       {toast && (
@@ -7831,7 +7837,7 @@ export default function Dashboard() {
                         </div>
                       );
                       case 'goals': return (
-                        <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
+                        <div className="lc" style={{ ...CARD, marginBottom: 16, minWidth: 0, overflow: 'hidden' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: goals.length ? 16 : 0 }}>
                             <div style={{ fontWeight: 600 }}>Savings Goals</div>
                             <button onClick={() => { setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }}
@@ -7860,7 +7866,7 @@ export default function Dashboard() {
                                   </div>
                                 </div>
                               )}
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
                                 {[
                                   { label: 'Goal Name',     type: 'text',   key: 'name',   placeholder: 'e.g. Emergency Fund' },
                                   { label: 'Target Amount', type: 'number', key: 'target', placeholder: 'e.g. 10000' },
@@ -7903,7 +7909,7 @@ export default function Dashboard() {
                           {goals.length === 0 && !showGoalForm ? (
                             <div style={{ color: TEXT3, fontSize: 13, padding: '8px 0' }}>No goals yet. Track your savings targets here.</div>
                           ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 12 }}>
                               {goals.map(goal => {
                                 const acct    = accounts.find(a => a.account_id === goal.accountId);
                                 const current = acct ? (acct.balances?.current || 0) : 0;

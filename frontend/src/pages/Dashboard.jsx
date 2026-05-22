@@ -2469,7 +2469,7 @@ const OV_SECTION_TOUR = {
 const BASELINE_TOUR_SEL = '[data-tour="overview-baseline"]';
 
 function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder, includeBaseline = true) {
-  const FIXED_FIRST_SELS = new Set(['[data-tour="brand"]', '[data-tour="sidebar-nav"]']);
+  const FIXED_FIRST_SELS = new Set(['[data-tour="brand"]', '[data-tour="sidebar-nav"]', '[data-tour="overview-customize"]']);
   const FIXED_LAST_SELS  = new Set(['[data-tour="nav-settings"]']);
 
   const fixedFirst = base.filter(s => FIXED_FIRST_SELS.has(s.sel));
@@ -2488,7 +2488,7 @@ function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder, includeBase
     if (s.panel === 'insights' && s.insightsTab) (inStepsByTab[s.insightsTab] = inStepsByTab[s.insightsTab] || []).push(s);
   });
   const allOvSecs = Object.keys(OV_SECTION_TOUR);
-  const ovSorted = [...(ovOrder || allOvSecs).filter(k => k in ovStepsBySec), ...allOvSecs.filter(k => !(ovOrder || allOvSecs).includes(k) && k in ovStepsBySec)];
+  const ovSorted = (ovOrder || allOvSecs).filter(k => k in ovStepsBySec);
   const sortedOvSteps = [];
   ovSorted.forEach(sec => {
     if (sec === 'chart' && baselineStep && includeBaseline) sortedOvSteps.push(baselineStep);
@@ -2525,7 +2525,32 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
     const buildRect = () => {
       const el = document.querySelector(sel);
       if (!el) return null;
-      const r = el.getBoundingClientRect();
+      let r = el.getBoundingClientRect();
+      // Shrink-wrap spotlight to text content for full-width nav buttons
+      if (el.tagName === 'BUTTON' && el.getAttribute('data-tour')?.startsWith('nav-')) {
+        try {
+          const range = document.createRange();
+          let cLeft = Infinity, cRight = -Infinity, cTop = Infinity, cBottom = -Infinity;
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode())) {
+            if (node.textContent.trim()) {
+              range.selectNode(node);
+              Array.from(range.getClientRects()).forEach(tr => {
+                if (tr.width > 0) {
+                  cLeft = Math.min(cLeft, tr.left);
+                  cRight = Math.max(cRight, tr.right);
+                  cTop = Math.min(cTop, tr.top);
+                  cBottom = Math.max(cBottom, tr.bottom);
+                }
+              });
+            }
+          }
+          if (cLeft < Infinity && cRight - cLeft < r.width - 4) {
+            r = { top: cTop, left: cLeft, right: cRight, bottom: cBottom, width: cRight - cLeft, height: cBottom - cTop };
+          }
+        } catch (_) { /* fall back to full rect */ }
+      }
       if (selBottom) {
         const elB = document.querySelector(selBottom);
         if (elB) {
@@ -2574,7 +2599,33 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
   // Secondary outline rects (nav button, subtab) — measured inline, no scroll needed
   const extraRects = (extraSels || []).map(sel => {
     const el = document.querySelector(sel);
-    return el ? el.getBoundingClientRect() : null;
+    if (!el) return null;
+    let r = el.getBoundingClientRect();
+    if (el.tagName === 'BUTTON' && el.getAttribute('data-tour')?.startsWith('nav-')) {
+      try {
+        const range = document.createRange();
+        let cLeft = Infinity, cRight = -Infinity, cTop = Infinity, cBottom = -Infinity;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          if (node.textContent.trim()) {
+            range.selectNode(node);
+            Array.from(range.getClientRects()).forEach(tr => {
+              if (tr.width > 0) {
+                cLeft = Math.min(cLeft, tr.left);
+                cRight = Math.max(cRight, tr.right);
+                cTop = Math.min(cTop, tr.top);
+                cBottom = Math.max(cBottom, tr.bottom);
+              }
+            });
+          }
+        }
+        if (cLeft < Infinity && cRight - cLeft < r.width - 4) {
+          r = { top: cTop, left: cLeft, right: cRight, bottom: cBottom, width: cRight - cLeft, height: cBottom - cTop };
+        }
+      } catch (_) { /* fall back */ }
+    }
+    return r;
   }).filter(Boolean);
   const TW = 300;
   const TH = 280; // estimated tooltip height
@@ -6872,8 +6923,25 @@ export default function Dashboard() {
                 {isPremium && !onboardingDismissed && (() => {
                   const items = [
                     { id: 'account', label: 'Connect a bank account',  done: !isDemoData,                           action: () => setShowConnectModal(true),                                              cta: 'Connect' },
-                    { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => { setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false); }, cta: 'Set limits' },
-                    { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setPanel('goals'); setShowGoalForm(true); setEditingGoal(null); setGoalForm({ name: '', target: '', accountId: '' }); }, cta: 'Add goal' },
+                    { id: 'budget',  label: 'Set a spending limit',     done: Object.keys(budgetLimits).length > 0,  action: () => {
+                      setPanel('cashflow'); setCashFlowTab('budgeting'); setBudgetTab('spending'); setBudgetSummaryView(false);
+                      setTimeout(() => {
+                        const container = mainRef.current;
+                        const target = document.querySelector('[data-scroll-target="spending-by-cat"]');
+                        if (!container || !target) return;
+                        const from = container.scrollTop;
+                        const elB = target.getBoundingClientRect();
+                        const cB = container.getBoundingClientRect();
+                        const dest = from + elB.top - cB.top - (container.clientHeight - elB.height) / 2;
+                        const dist = dest - from;
+                        const dur = 900;
+                        const t0 = performance.now();
+                        const ease = p => p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+                        const tick = now => { const p = Math.min((now - t0) / dur, 1); container.scrollTop = from + dist * ease(p); if (p < 1) requestAnimationFrame(tick); };
+                        requestAnimationFrame(tick);
+                      }, 150);
+                    }, cta: 'Set limits' },
+                    { id: 'goal',    label: 'Create a savings goal',    done: goals.length > 0,                      action: () => { setPanel('goals'); }, cta: 'Add goal' },
                   ];
                   const doneCount = items.filter(i => i.done).length;
                   if (doneCount === items.length) return null;

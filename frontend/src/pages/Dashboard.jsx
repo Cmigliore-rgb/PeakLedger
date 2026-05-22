@@ -2561,8 +2561,6 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
       return r;
     };
 
-    // Re-enable overflow for slow custom scroll, re-lock when done
-    if (container) container.style.overflowY = 'auto';
     const el = document.querySelector(sel);
     if (el) {
       const elB = el.getBoundingClientRect();
@@ -2577,13 +2575,12 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
         const p = Math.min((now - t0) / dur, 1);
         container.scrollTop = from + dist * ease(p);
         if (p < 1) requestAnimationFrame(step);
-        else { if (container) container.style.overflowY = 'hidden'; setRect(buildRect()); }
+        else setRect(buildRect());
       };
       requestAnimationFrame(step);
       setRect(buildRect());
     } else {
       setRect(null);
-      if (container) container.style.overflowY = 'hidden';
     }
 
     // Keep spotlight synced if any residual browser reflow shifts things
@@ -4134,14 +4131,18 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
   useEffect(() => {
-    const show = () => { if (privacyRef.current) privacyRef.current.style.display = 'flex'; };
-    const hide = () => { if (privacyRef.current) privacyRef.current.style.display = 'none'; };
-    const onVis = () => (document.hidden ? show : hide)();
+    const show = () => { if (privacyRef.current) privacyRef.current.style.visibility = 'visible'; };
+    const hide = () => { if (privacyRef.current) privacyRef.current.style.visibility = 'hidden'; };
+    const onVis = () => { if (document.hidden) show(); else hide(); };
     document.addEventListener('visibilitychange', onVis);
+    document.addEventListener('freeze', show);
+    document.addEventListener('resume', hide);
     window.addEventListener('pagehide', show);
     window.addEventListener('pageshow', hide);
     return () => {
       document.removeEventListener('visibilitychange', onVis);
+      document.removeEventListener('freeze', show);
+      document.removeEventListener('resume', hide);
       window.removeEventListener('pagehide', show);
       window.removeEventListener('pageshow', hide);
     };
@@ -4899,7 +4900,7 @@ export default function Dashboard() {
       <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } } @keyframes pl-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
       {/* ── PRIVACY SCREEN (tab / app-switcher) ───────── */}
-      <div ref={privacyRef} style={{ display: 'none', position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+      <div ref={privacyRef} style={{ visibility: 'hidden', display: 'flex', position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
         <img src="/logo.png" alt="PeakLedger" style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'contain' }} />
         <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.3px' }}>PeakLedger</span>
       </div>

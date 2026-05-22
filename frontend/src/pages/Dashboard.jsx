@@ -2569,13 +2569,10 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
       const targetTop = container.scrollTop + elB.top - cB.top - (container.clientHeight - elB.height) / 2;
       const from = container.scrollTop;
       const dist = targetTop - from;
-      if (Math.abs(dist) < 3) {
-        // Already in view — show spotlight immediately
-        setRect(buildRect());
-      } else {
-        // Needs scroll — clear spotlight, show only after animation lands
-        setRect(null);
-        animating = true;
+      // Only suppress spotlight during scroll when the element is genuinely off-screen (below fold)
+      const offScreen = elB.top > cB.bottom || elB.bottom < cB.top;
+      if (offScreen) { animating = true; setRect(null); } else { setRect(buildRect()); }
+      if (Math.abs(dist) > 2) {
         const dur = 900;
         const t0 = performance.now();
         const ease = p => p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
@@ -2591,7 +2588,7 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
       setRect(null);
     }
 
-    // Keep spotlight synced after animation; skip during scroll animation to avoid mid-scroll jitter
+    // Keep spotlight synced; suppressed only while scrolling to an off-screen element
     const measure = () => { if (!animating) { const r = buildRect(); if (r) setRect(r); } };
     window.addEventListener('scroll', measure, true);
     return () => window.removeEventListener('scroll', measure, true);
@@ -4137,32 +4134,10 @@ export default function Dashboard() {
     }
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
+  const [appHidden, setAppHidden] = useState(false);
   useEffect(() => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = [
-      'visibility:hidden',
-      'display:flex',
-      'position:fixed',
-      'inset:0',
-      'z-index:2147483647',
-      'background:#0a0d14',
-      'align-items:center',
-      'justify-content:center',
-      'flex-direction:column',
-      'gap:16px',
-    ].join(';');
-    const img = document.createElement('img');
-    img.src = '/logo.png';
-    img.style.cssText = 'width:72px;height:72px;border-radius:16px;object-fit:contain';
-    const label = document.createElement('span');
-    label.textContent = 'PeakLedger';
-    label.style.cssText = 'font-size:18px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;font-family:system-ui,sans-serif';
-    overlay.appendChild(img);
-    overlay.appendChild(label);
-    document.body.appendChild(overlay);
-
-    const show = () => { overlay.style.visibility = 'visible'; };
-    const hide = () => { overlay.style.visibility = 'hidden'; };
+    const show = () => setAppHidden(true);
+    const hide = () => setAppHidden(false);
     const onVis = () => { if (document.hidden) show(); else hide(); };
     document.addEventListener('visibilitychange', onVis);
     document.addEventListener('freeze', show);
@@ -4170,7 +4145,6 @@ export default function Dashboard() {
     window.addEventListener('pagehide', show);
     window.addEventListener('pageshow', hide);
     return () => {
-      document.body.removeChild(overlay);
       document.removeEventListener('visibilitychange', onVis);
       document.removeEventListener('freeze', show);
       document.removeEventListener('resume', hide);
@@ -4929,6 +4903,13 @@ export default function Dashboard() {
   return (
     <div style={{ display: 'flex', height: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 14, color: TEXT, overflow: 'hidden' }}>
       <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } } @keyframes pl-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+      {appHidden && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+          <img src="/logo.png" alt="PeakLedger" style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'contain' }} />
+          <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.3px' }}>PeakLedger</span>
+        </div>
+      )}
 
       {/* ── TOAST ──────────────────────────────────────── */}
       {toast && (

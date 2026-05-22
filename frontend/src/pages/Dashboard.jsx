@@ -2562,29 +2562,37 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
     };
 
     const el = document.querySelector(sel);
+    let animating = false;
     if (el) {
       const elB = el.getBoundingClientRect();
       const cB = container.getBoundingClientRect();
       const targetTop = container.scrollTop + elB.top - cB.top - (container.clientHeight - elB.height) / 2;
       const from = container.scrollTop;
       const dist = targetTop - from;
-      const dur = 900;
-      const t0 = performance.now();
-      const ease = p => p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
-      const step = now => {
-        const p = Math.min((now - t0) / dur, 1);
-        container.scrollTop = from + dist * ease(p);
-        if (p < 1) requestAnimationFrame(step);
-        else setRect(buildRect());
-      };
-      requestAnimationFrame(step);
-      setRect(buildRect());
+      if (Math.abs(dist) < 3) {
+        // Already in view — show spotlight immediately
+        setRect(buildRect());
+      } else {
+        // Needs scroll — clear spotlight, show only after animation lands
+        setRect(null);
+        animating = true;
+        const dur = 900;
+        const t0 = performance.now();
+        const ease = p => p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+        const step = now => {
+          const p = Math.min((now - t0) / dur, 1);
+          container.scrollTop = from + dist * ease(p);
+          if (p < 1) requestAnimationFrame(step);
+          else { animating = false; setRect(buildRect()); }
+        };
+        requestAnimationFrame(step);
+      }
     } else {
       setRect(null);
     }
 
-    // Keep spotlight synced if any residual browser reflow shifts things
-    const measure = () => { const r = buildRect(); if (r) setRect(r); };
+    // Keep spotlight synced after animation; skip during scroll animation to avoid mid-scroll jitter
+    const measure = () => { if (!animating) { const r = buildRect(); if (r) setRect(r); } };
     window.addEventListener('scroll', measure, true);
     return () => window.removeEventListener('scroll', measure, true);
   }, [step, steps, containerRef]);
@@ -3426,7 +3434,6 @@ function useCountUp(target, duration = 700) {
 
 export default function Dashboard() {
   const { user, login, logout, refreshUser, isPremium, isProfessor, isAdmin, isStudent, isUser } = useAuth();
-  const privacyRef = useRef(null);
   const [panel, setPanel] = useState(() => localStorage.getItem(`pl_panel_${user?.id}`) || 'overview');
   const [accounts, setAccounts] = useState([]);
   const [isDemoData, setIsDemoData] = useState(false);
@@ -4131,8 +4138,31 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { localStorage.setItem(`pl_layout_order_${user?.id}`, JSON.stringify(layoutOrder)); }, [layoutOrder]);
   useEffect(() => {
-    const show = () => { if (privacyRef.current) privacyRef.current.style.visibility = 'visible'; };
-    const hide = () => { if (privacyRef.current) privacyRef.current.style.visibility = 'hidden'; };
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'visibility:hidden',
+      'display:flex',
+      'position:fixed',
+      'inset:0',
+      'z-index:2147483647',
+      'background:#0a0d14',
+      'align-items:center',
+      'justify-content:center',
+      'flex-direction:column',
+      'gap:16px',
+    ].join(';');
+    const img = document.createElement('img');
+    img.src = '/logo.png';
+    img.style.cssText = 'width:72px;height:72px;border-radius:16px;object-fit:contain';
+    const label = document.createElement('span');
+    label.textContent = 'PeakLedger';
+    label.style.cssText = 'font-size:18px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;font-family:system-ui,sans-serif';
+    overlay.appendChild(img);
+    overlay.appendChild(label);
+    document.body.appendChild(overlay);
+
+    const show = () => { overlay.style.visibility = 'visible'; };
+    const hide = () => { overlay.style.visibility = 'hidden'; };
     const onVis = () => { if (document.hidden) show(); else hide(); };
     document.addEventListener('visibilitychange', onVis);
     document.addEventListener('freeze', show);
@@ -4140,6 +4170,7 @@ export default function Dashboard() {
     window.addEventListener('pagehide', show);
     window.addEventListener('pageshow', hide);
     return () => {
+      document.body.removeChild(overlay);
       document.removeEventListener('visibilitychange', onVis);
       document.removeEventListener('freeze', show);
       document.removeEventListener('resume', hide);
@@ -4898,12 +4929,6 @@ export default function Dashboard() {
   return (
     <div style={{ display: 'flex', height: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 14, color: TEXT, overflow: 'hidden' }}>
       <style>{`@keyframes pl-bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } } @keyframes pl-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-
-      {/* ── PRIVACY SCREEN (tab / app-switcher) ───────── */}
-      <div ref={privacyRef} style={{ visibility: 'hidden', display: 'flex', position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0d14', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <img src="/logo.png" alt="PeakLedger" style={{ width: 72, height: 72, borderRadius: 16, objectFit: 'contain' }} />
-        <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.3px' }}>PeakLedger</span>
-      </div>
 
       {/* ── TOAST ──────────────────────────────────────── */}
       {toast && (

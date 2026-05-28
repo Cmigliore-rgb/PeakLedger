@@ -12088,6 +12088,26 @@ export default function Dashboard() {
                           <strong>Error:</strong> {screenerJob.error}
                         </div>
                       )}
+                      {!screenerJob.running && (() => {
+                        const [dbg, setDbg] = React.useState(null);
+                        const [dbgLoading, setDbgLoading] = React.useState(false);
+                        return (
+                          <div style={{ marginBottom: 16 }}>
+                            <button
+                              onClick={async () => { setDbgLoading(true); try { const { data } = await api.get('/screener/debug'); setDbg(data); } catch (e) { setDbg({ error: e.message }); } finally { setDbgLoading(false); } }}
+                              disabled={dbgLoading}
+                              style={{ fontSize: 11, color: TEXT3, background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+                            >
+                              {dbgLoading ? 'Testing...' : 'Test Connection'}
+                            </button>
+                            {dbg && (
+                              <pre style={{ marginTop: 10, fontSize: 11, color: TEXT2, background: DARK, borderRadius: 8, padding: 12, overflowX: 'auto', lineHeight: 1.6 }}>
+                                {JSON.stringify(dbg, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {!screenerJob.running && screenerResults?.regime_bullish === false && (
                         <div style={{ fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>

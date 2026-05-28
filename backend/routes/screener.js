@@ -62,14 +62,25 @@ const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 async function fetchSP500Tickers() {
   const { data: html } = await axios.get(
     'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies',
-    { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15_000 }
+    { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PeakLedger/1.0)' }, timeout: 20_000 }
   );
-  const $       = cheerioLoad(html);
+  const $ = cheerioLoad(html);
   const tickers = [];
-  $('#constituents tbody tr').each((_, row) => {
-    const raw = $(row).find('td').first().text().trim();
-    if (raw) tickers.push(raw.replace('.', '-'));
+
+  // Try known table ID first, then fall back to class selectors
+  let rows = $('#constituents tbody tr');
+  if (!rows.length) rows = $('table.wikitable.sortable').first().find('tbody tr');
+  if (!rows.length) rows = $('table.wikitable').first().find('tbody tr');
+
+  rows.each((_, row) => {
+    const raw = $(row).find('td').first().text().trim().replace(/\./g, '-');
+    // Tickers are 1-5 uppercase letters (+ optional dash suffix like BRK-B)
+    if (/^[A-Z]{1,5}(-[A-Z]{1,2})?$/.test(raw)) tickers.push(raw);
   });
+
+  if (tickers.length < 400) {
+    throw new Error(`Wikipedia scrape returned only ${tickers.length} tickers (expected ~500). Page structure may have changed.`);
+  }
   return tickers;
 }
 
@@ -77,7 +88,7 @@ async function fetchSP500Tickers() {
 async function checkRegime() {
   const since = new Date();
   since.setMonth(since.getMonth() - 3);
-  const spy = await yahooFinance.chart('SPY', { period1: since, interval: '1d' }, { validateResult: false });
+  const spy = await yahooFinance.chart('SPY', { period1: since, interval: '1d' });
   const closes = (spy.quotes || []).filter(q => q.close != null).map(q => q.close);
   if (closes.length < 50) return { bullish: true, spyClose: null, sma50: null };
   const sma50    = closes.slice(-50).reduce((a, b) => a + b, 0) / 50;
@@ -90,7 +101,7 @@ async function analyzeTicker(ticker) {
   const since = new Date();
   since.setMonth(since.getMonth() - 6);
 
-  const chart = await yahooFinance.chart(ticker, { period1: since, interval: '1d' }, { validateResult: false });
+  const chart = await yahooFinance.chart(ticker, { period1: since, interval: '1d' });
   if (!chart?.quotes?.length) return null;
 
   const quotes = chart.quotes.filter(
@@ -276,6 +287,27 @@ const requireAdmin = [
 // GET /api/screener/status — current job progress (for frontend polling)
 router.get('/status', requireAdmin, (req, res) => {
   res.json(job);
+});
+
+// GET /api/screener/debug — test each step individually without running the full screener
+router.get('/debug', requireAdmin, async (req, res) => {
+  const out = {};
+  try {
+    const tickers = await fetchSP500Tickers();
+    out.tickers = { ok: true, count: tickers.length, sample: tickers.slice(0, 5) };
+  } catch (e) { out.tickers = { ok: false, error: e.message }; }
+
+  try {
+    const regime = await checkRegime();
+    out.regime = { ok: true, ...regime };
+  } catch (e) { out.regime = { ok: false, error: e.message }; }
+
+  try {
+    const sample = await analyzeTicker('AAPL');
+    out.sampleTicker = { ok: true, result: sample };
+  } catch (e) { out.sampleTicker = { ok: false, error: e.message }; }
+
+  res.json(out);
 });
 
 // GET /api/screener/results — latest saved screener run

@@ -12083,6 +12083,12 @@ export default function Dashboard() {
                         </div>
                       )}
 
+                      {!screenerJob.running && screenerJob.error && (
+                        <div style={{ fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+                          <strong>Error:</strong> {screenerJob.error}
+                        </div>
+                      )}
+
                       {!screenerJob.running && screenerResults?.regime_bullish === false && (
                         <div style={{ fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
                           SPY is below its 50-day SMA. Bearish regime active. No setups generated.

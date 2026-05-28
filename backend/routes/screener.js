@@ -168,12 +168,30 @@ async function analyzeTicker(ticker) {
     target:         round(target),
     shares,
     risk_dollars:   round(riskDollars),
+    avg_volume:     Math.round(avgVol),
     last_10_closes: last10,
   };
 }
 
-// Generate a Claude brief for one setup
-// System prompt is cached after the first call — calls 2-10 hit cache at ~10% of normal input cost
+// ── Part 2: Signal Rating ─────────────────────────────────────────────────────
+// Scores each setup 0-5 and assigns STRONG / BORDERLINE / SKIP.
+// Criteria: ROC>8%, RSI 45-60, EMA dist -1% to +1%, ATR/price<3%, volume>3M.
+function scoreSetup(setup) {
+  let score = 0;
+  const criteria = {
+    roc_strong:    setup.roc_pct > 8,
+    rsi_ideal:     setup.rsi >= 45 && setup.rsi <= 60,
+    ema_tight:     Math.abs(setup.ema_dist_pct) <= 1,
+    atr_low:       (setup.atr / setup.price) * 100 < 3,
+    volume_high:   setup.avg_volume > 3_000_000,
+  };
+  Object.values(criteria).forEach(v => { if (v) score++; });
+  const signal = score >= 4 ? 'STRONG' : score === 3 ? 'BORDERLINE' : 'SKIP';
+  return { score, signal, criteria };
+}
+
+// ── Part 3: Updated Claude Brief ─────────────────────────────────────────────
+// Includes signal score/rating in the prompt; Claude opens with the rating label.
 async function generateBrief(client, setup) {
   const sign = v => (v >= 0 ? '+' : '') + v;
   const msg = await client.messages.create({
@@ -184,10 +202,11 @@ async function generateBrief(client, setup) {
     messages: [{
       role: 'user',
       content:
-        `Ticker: ${setup.ticker}\n` +
+        `Ticker: ${setup.ticker} | Signal: ${setup.signal} (${setup.score}/5)\n` +
         `Entry: $${setup.price} | Stop: $${setup.stop_loss} | Target: $${setup.target} | Shares: ${setup.shares} | Risk: $${setup.risk_dollars}\n` +
         `4-Week ROC: ${sign(setup.roc_pct)}% | RSI(14): ${setup.rsi} | 21-day EMA: $${setup.ema} (${sign(setup.ema_dist_pct)}%) | ATR(14): $${setup.atr}\n` +
-        `Last 10 closes: ${JSON.stringify(setup.last_10_closes)}`,
+        `Avg Volume: ${(setup.avg_volume / 1_000_000).toFixed(1)}M | Last 10 closes: ${JSON.stringify(setup.last_10_closes)}\n\n` +
+        `Open your brief with exactly "STRONG SETUP —", "BORDERLINE —", or "SKIP THIS ONE —" (matching the signal above), then give your reasoning.`,
     }],
   });
   return msg.content[0].text.trim();
@@ -237,7 +256,8 @@ async function runScreener() {
       return;
     }
 
-    // 4. Rank by 4-week ROC, keep top N
+    // 4. Score, rank by ROC, keep top N
+    setups.forEach(s => { const { score, signal, criteria } = scoreSetup(s); s.score = score; s.signal = signal; s.criteria = criteria; });
     setups.sort((a, b) => b.roc_pct - a.roc_pct);
     const top = setups.slice(0, TOP_N);
 

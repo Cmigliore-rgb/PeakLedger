@@ -12119,8 +12119,8 @@ export default function Dashboard() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 680 }}>
                               <thead>
                                 <tr style={{ borderBottom: BORDER }}>
-                                  {['#', 'Ticker', 'Price', 'ROC%', 'RSI', 'EMA Dist', 'Stop', 'Target', 'Shares', 'Risk$'].map(h => (
-                                    <th key={h} style={{ padding: '10px 12px', textAlign: h === '#' || h === 'Ticker' ? 'left' : 'right', color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                                  {['#', 'Ticker', 'Signal', 'Price', 'ROC%', 'RSI', 'EMA Dist', 'Stop', 'Target', 'Shares', 'Risk$'].map(h => (
+                                    <th key={h} style={{ padding: '10px 12px', textAlign: h === '#' || h === 'Ticker' || h === 'Signal' ? 'left' : 'right', color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
                                   ))}
                                 </tr>
                               </thead>
@@ -12133,6 +12133,11 @@ export default function Dashboard() {
                                     >
                                       <td style={{ padding: '11px 12px', color: TEXT3, fontWeight: 600 }}>{i + 1}</td>
                                       <td style={{ padding: '11px 12px', fontWeight: 700, color: BLUE }}>{s.ticker}</td>
+                                      <td style={{ padding: '11px 12px' }}>
+                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 5, background: s.signal === 'STRONG' ? 'rgba(74,222,128,0.15)' : s.signal === 'BORDERLINE' ? 'rgba(251,191,36,0.15)' : 'rgba(248,113,113,0.15)', color: s.signal === 'STRONG' ? '#4ade80' : s.signal === 'BORDERLINE' ? '#fbbf24' : '#f87171' }}>
+                                          {s.signal} {s.score}/5
+                                        </span>
+                                      </td>
                                       <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>${s.price}</td>
                                       <td style={{ padding: '11px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 600, fontFamily: 'monospace' }}>+{s.roc_pct}%</td>
                                       <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{s.rsi}</td>
@@ -12144,7 +12149,7 @@ export default function Dashboard() {
                                     </tr>
                                     {screenerExpanded === s.ticker && s.brief && (
                                       <tr style={{ borderBottom: `1px solid ${BORDER_C}` }}>
-                                        <td colSpan={10} style={{ padding: '14px 16px', background: 'rgba(77,163,255,0.03)' }}>
+                                        <td colSpan={11} style={{ padding: '14px 16px', background: 'rgba(77,163,255,0.03)' }}>
                                           <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.7, maxWidth: 720 }}>{s.brief}</div>
                                         </td>
                                       </tr>

@@ -195,7 +195,7 @@ function scoreSetup(setup) {
 async function generateBrief(client, setup) {
   const sign = v => (v >= 0 ? '+' : '') + v;
   const msg = await client.messages.create({
-    model: 'claude-opus-4-7',
+    model: 'claude-sonnet-4-6',
     max_tokens: 300,
     output_config: { effort: 'medium' },
     system: [{ type: 'text', text: BRIEF_SYSTEM, cache_control: { type: 'ephemeral' } }],

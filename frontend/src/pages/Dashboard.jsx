@@ -2303,7 +2303,7 @@ const FINANCE_TOUR_STEPS = [
     body: 'Signal Engine scores every article using four factors: magnitude (how big the event is), probability (how likely it is to move the stock), immediacy (time sensitivity), and moat (how defensible the company is). The heatmap shows which tickers have the strongest signals right now. Click any ticker to see sector contagion and the articles driving the score.' },
   { sel: '[data-tour="options-header"]',           panel: 'insights',   insightsTab: 'options',     side: 'right',   extraSels: _IN_O,    title: 'Market Insights: Options',
     body: 'The Options tab shows a live options chain for any ticker you enter. Call and put contracts are listed by strike and expiration with bid, ask, volume, open interest, and implied volatility. Use this alongside the Analyst track to practice reading real options flow before making any actual trades.' },
-  { sel: '[data-tour="learn-tab-essentials"]',     panel: 'learn',      learnCategory: 'essentials', side: 'right',  extraSels: _LRN,
+  { sel: '[data-tour="learn-tabs"]',               panel: 'learn',      learnCategory: 'essentials', side: 'bottom', extraSels: _LRN,
     title: 'Learn: The Essentials',
     body: 'The Essentials track covers the full spectrum of personal finance: net worth, the 50/30/20 rule, emergency funds, credit scores, debt payoff strategies, tax planning, compound interest, dollar-cost averaging, asset allocation, index funds, and retirement accounts. Each card has a formula, a plain-English explanation, and a worked example. The Emergency Fund and Debt Payoff cards include interactive calculators you can fill in with your own numbers.' },
   { sel: '[data-tour="learn-tab-analyst"]',        panel: 'learn',      learnCategory: 'analyst',   side: 'right',   extraSels: _LRN,
@@ -2375,7 +2375,7 @@ const STUDENT_TOUR_STEPS = [
     body: 'Signal Engine scores every article using four factors: magnitude (how big the event is), probability (how likely it is to move the stock), immediacy (time sensitivity), and moat (how defensible the company is). The heatmap shows which tickers have the strongest signals right now. Click any ticker to see sector contagion.' },
   { sel: '[data-tour="options-header"]',           panel: 'insights',   insightsTab: 'options',     side: 'right',   extraSels: _IN_O,    title: 'Market Insights: Options',
     body: 'The Options tab shows a live options chain for any ticker you enter. Call and put contracts are listed by strike and expiration with bid, ask, volume, open interest, and implied volatility. Use this alongside the Analyst track to practice reading options flow the way institutional traders do.' },
-  { sel: '[data-tour="learn-tab-essentials"]',     panel: 'learn',      learnCategory: 'essentials', side: 'right',  extraSels: _LRN,
+  { sel: '[data-tour="learn-tabs"]',               panel: 'learn',      learnCategory: 'essentials', side: 'bottom', extraSels: _LRN,
     title: 'Learn: The Essentials',
     body: 'The Essentials track covers personal finance fundamentals structured to mirror your course syllabus: net worth, the 50/30/20 rule, emergency funds, credit scores, debt payoff, taxes, compound interest, dollar-cost averaging, asset allocation, and retirement accounts. Each card has a formula, explanation, and worked example you can interact with. The Emergency Fund and Debt Payoff calculators let you plug in your own numbers.' },
   { sel: '[data-tour="learn-tab-analyst"]',        panel: 'learn',      learnCategory: 'analyst',   side: 'right',   extraSels: _LRN,
@@ -2447,7 +2447,7 @@ const PROFESSOR_TOUR_STEPS = [
     body: 'Signal Engine scores every article using four factors: magnitude (how big the event is), probability (how likely it is to move the stock), immediacy (time sensitivity), and moat (how defensible the company is). Students can use the heatmap to see which tickers have the strongest signals right now, then investigate the underlying articles.' },
   { sel: '[data-tour="options-header"]',           panel: 'insights',   insightsTab: 'options',     side: 'right',   extraSels: _IN_O,    title: 'Market Insights: Options',
     body: 'The Options tab shows a live options chain for any ticker. Call and put contracts are listed by strike and expiration with bid, ask, volume, open interest, and implied volatility. This is a direct complement to the options pricing concepts in the Analyst track.' },
-  { sel: '[data-tour="learn-tab-essentials"]',     panel: 'learn',      learnCategory: 'essentials', side: 'right',  extraSels: _LRN,
+  { sel: '[data-tour="learn-tabs"]',               panel: 'learn',      learnCategory: 'essentials', side: 'bottom', extraSels: _LRN,
     title: 'Learn: The Essentials',
     body: 'The Essentials track covers all personal finance fundamentals structured to mirror your syllabus: net worth, the 50/30/20 rule, emergency funds, credit scores, debt payoff, taxes, compound interest, dollar-cost averaging, asset allocation, index funds, and retirement accounts. Each card has a formula, plain-English explanation, a worked example, and interactive calculators students can use for assignments.' },
   { sel: '[data-tour="learn-tab-analyst"]',        panel: 'learn',      learnCategory: 'analyst',   side: 'right',   extraSels: _LRN,
@@ -2518,7 +2518,7 @@ function buildSortedSteps(base, ovOrder, cfOrder, inOrder, navOrder, includeBase
 function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
   const [rect, setRect] = React.useState(null);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const { sel, selBottom } = steps[step];
     const container = containerRef?.current;
 
@@ -2562,16 +2562,13 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
     };
 
     const el = document.querySelector(sel);
-    let animating = false;
     if (el) {
       const elB = el.getBoundingClientRect();
       const cB = container.getBoundingClientRect();
       const targetTop = container.scrollTop + elB.top - cB.top - (container.clientHeight - elB.height) / 2;
       const from = container.scrollTop;
       const dist = targetTop - from;
-      // Only suppress spotlight during scroll when the element is genuinely off-screen (below fold)
-      const offScreen = elB.top > cB.bottom || elB.bottom < cB.top;
-      if (offScreen) { animating = true; setRect(null); } else { setRect(buildRect()); }
+      setRect(buildRect());
       if (Math.abs(dist) > 2) {
         const dur = 900;
         const t0 = performance.now();
@@ -2580,7 +2577,7 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
           const p = Math.min((now - t0) / dur, 1);
           container.scrollTop = from + dist * ease(p);
           if (p < 1) requestAnimationFrame(step);
-          else { animating = false; setRect(buildRect()); }
+          else setRect(buildRect());
         };
         requestAnimationFrame(step);
       }
@@ -2588,8 +2585,7 @@ function Tour({ steps, step, onNext, onPrev, onClose, containerRef }) {
       setRect(null);
     }
 
-    // Keep spotlight synced; suppressed only while scrolling to an off-screen element
-    const measure = () => { if (!animating) { const r = buildRect(); if (r) setRect(r); } };
+    const measure = () => { const r = buildRect(); if (r) setRect(r); };
     window.addEventListener('scroll', measure, true);
     return () => window.removeEventListener('scroll', measure, true);
   }, [step, steps, containerRef]);
@@ -3547,6 +3543,9 @@ export default function Dashboard() {
   const [tourStep, setTourStep] = useState(0);
   const [holdingsExpanded, setHoldingsExpanded] = useState(false);
   const [showManualHoldingForm, setShowManualHoldingForm] = useState(false);
+  const [screenerResults, setScreenerResults]   = useState(null);
+  const [screenerJob, setScreenerJob]           = useState({ running: false, progress: 0, total: 500, phase: '' });
+  const [screenerExpanded, setScreenerExpanded] = useState(null);
   const [manualHoldingEdit, setManualHoldingEdit] = useState(null); // raw manual holding being edited
   const [manualHoldingForm, setManualHoldingForm] = useState({ ticker: '', name: '', asset_type: 'stock', shares: '', cost_per_share: '', manual_value: '', purchase_date: '' });
   const [manualHoldingSaving, setManualHoldingSaving] = useState(false);
@@ -4218,6 +4217,16 @@ export default function Dashboard() {
     return buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd, baselineOn);
   };
 
+  const handleRunScreener = async () => {
+    try {
+      await api.post('/screener/run');
+      setScreenerJob({ running: true, progress: 0, total: 500, phase: 'Starting...' });
+      setScreenerExpanded(null);
+    } catch (e) {
+      alert(e.response?.data?.error || 'Failed to start screener.');
+    }
+  };
+
   const openTourAt = (stepIndex) => {
     const steps = getTourSteps();
     setStableTourSteps(steps);
@@ -4236,6 +4245,28 @@ export default function Dashboard() {
     if (!mainRef.current) return;
     mainRef.current.style.overflowY = showTour ? 'hidden' : 'auto';
   }, [showTour]);
+
+  // Load saved screener results when admin opens the investments panel
+  useEffect(() => {
+    if (panel !== 'investments' || !isAdmin) return;
+    api.get('/screener/results').then(({ data }) => setScreenerResults(data)).catch(() => {});
+  }, [panel]);
+
+  // Poll job status every 3s while screener is running
+  useEffect(() => {
+    if (!screenerJob.running) return;
+    const id = setInterval(async () => {
+      try {
+        const { data } = await api.get('/screener/status');
+        setScreenerJob(data);
+        if (!data.running) {
+          const { data: res } = await api.get('/screener/results');
+          setScreenerResults(res);
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(id);
+  }, [screenerJob.running]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -12014,6 +12045,103 @@ export default function Dashboard() {
                     </>
                   );
                 })()}
+
+                {/* ── Admin: Swing Screener ─────────────────────────────── */}
+                {isAdmin && (() => {
+                  const pct = screenerJob.total > 0 ? Math.min(100, (screenerJob.progress / screenerJob.total) * 100) : 0;
+                  return (
+                    <div style={{ marginTop: 40, paddingTop: 32, borderTop: BORDER }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>Swing Screener</div>
+                          {screenerResults?.run_date && (
+                            <div style={{ fontSize: 12, color: TEXT2, marginTop: 3 }}>
+                              Last run: {screenerResults.run_date}
+                              <span style={{ marginLeft: 10, color: screenerResults.regime_bullish ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+                                {screenerResults.regime_bullish ? 'Bullish' : 'Bearish'} regime
+                              </span>
+                              {screenerResults.message ? <span style={{ marginLeft: 8, color: TEXT3 }}>{screenerResults.message}</span> : null}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleRunScreener}
+                          disabled={screenerJob.running}
+                          style={{ padding: '9px 22px', borderRadius: 8, border: 'none', background: screenerJob.running ? MUTED : BLUE_BTN, color: screenerJob.running ? TEXT2 : '#fff', fontSize: 13, fontWeight: 700, cursor: screenerJob.running ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                        >
+                          {screenerJob.running ? 'Running...' : 'Run Screener'}
+                        </button>
+                      </div>
+
+                      {screenerJob.running && (
+                        <div className="lc" style={{ ...CARD, padding: '16px 20px', marginBottom: 20 }}>
+                          <div style={{ fontSize: 12, color: TEXT2, marginBottom: 10 }}>{screenerJob.phase}</div>
+                          <div style={{ background: DARK, borderRadius: 6, height: 6, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 6, background: BLUE, width: `${pct}%`, transition: 'width 0.5s ease' }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: TEXT3, marginTop: 8 }}>{screenerJob.progress} / {screenerJob.total} tickers scanned</div>
+                        </div>
+                      )}
+
+                      {!screenerJob.running && screenerResults?.regime_bullish === false && (
+                        <div style={{ fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+                          SPY is below its 50-day SMA. Bearish regime active. No setups generated.
+                        </div>
+                      )}
+
+                      {!screenerJob.running && screenerResults?.setups?.length > 0 && (
+                        <div className="lc" style={{ ...CARD, overflow: 'hidden' }}>
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 680 }}>
+                              <thead>
+                                <tr style={{ borderBottom: BORDER }}>
+                                  {['#', 'Ticker', 'Price', 'ROC%', 'RSI', 'EMA Dist', 'Stop', 'Target', 'Shares', 'Risk$'].map(h => (
+                                    <th key={h} style={{ padding: '10px 12px', textAlign: h === '#' || h === 'Ticker' ? 'left' : 'right', color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {screenerResults.setups.map((s, i) => (
+                                  <React.Fragment key={s.ticker}>
+                                    <tr
+                                      onClick={() => setScreenerExpanded(screenerExpanded === s.ticker ? null : s.ticker)}
+                                      style={{ borderBottom: `1px solid ${BORDER_C}`, cursor: 'pointer', background: screenerExpanded === s.ticker ? 'rgba(77,163,255,0.05)' : 'transparent' }}
+                                    >
+                                      <td style={{ padding: '11px 12px', color: TEXT3, fontWeight: 600 }}>{i + 1}</td>
+                                      <td style={{ padding: '11px 12px', fontWeight: 700, color: BLUE }}>{s.ticker}</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>${s.price}</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 600, fontFamily: 'monospace' }}>+{s.roc_pct}%</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{s.rsi}</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: s.ema_dist_pct > 0 ? '#4ade80' : '#f87171', fontFamily: 'monospace' }}>{s.ema_dist_pct > 0 ? '+' : ''}{s.ema_dist_pct}%</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: '#f87171', fontFamily: 'monospace' }}>${s.stop_loss}</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: '#4ade80', fontFamily: 'monospace' }}>${s.target}</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{s.shares}</td>
+                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: TEXT2, fontFamily: 'monospace' }}>${s.risk_dollars}</td>
+                                    </tr>
+                                    {screenerExpanded === s.ticker && s.brief && (
+                                      <tr style={{ borderBottom: `1px solid ${BORDER_C}` }}>
+                                        <td colSpan={10} style={{ padding: '14px 16px', background: 'rgba(77,163,255,0.03)' }}>
+                                          <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.7, maxWidth: 720 }}>{s.brief}</div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {!screenerJob.running && !screenerResults?.run_date && (
+                        <div style={{ fontSize: 13, color: TEXT3, textAlign: 'center', padding: '36px 0', border: BORDER, borderRadius: 10 }}>
+                          No screener run yet. Click Run Screener to scan the S&P 500 for swing setups.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
               </div>
             )}
 

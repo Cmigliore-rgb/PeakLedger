@@ -8760,9 +8760,29 @@ export default function Dashboard() {
                             </div>
                             {/* Row 3: clean account name */}
                             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10, color: TEXT }}>{cleanAcctName(a.name, a.subtype, a.type, a.mask)}</div>
-                            {/* Row 4: balance */}
-                            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.5px', color: a.closed ? TEXT3 : TEXT, marginBottom: 14 }}>
-                              {a.closed ? '—' : fmt(a.balances?.current)}
+                            {/* Row 4: balance + optional override button */}
+                            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
+                              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.5px', color: a.closed ? TEXT3 : TEXT }}>
+                                {a.closed ? '—' : fmt(a.balances?.current)}
+                                {a._balance_overridden && <span style={{ fontSize: 10, fontWeight: 600, color: TEXT3, marginLeft: 6, letterSpacing: '0.3px' }}>overridden</span>}
+                              </div>
+                              {!a._manual && !a.closed && (
+                                <button
+                                  onClick={async e => {
+                                    e.stopPropagation();
+                                    const current = a._balance_overridden ? a.balances?.current : '';
+                                    const val = window.prompt(`Set correct balance for "${a.name}":\n(Leave blank to remove override)`, current);
+                                    if (val === null) return;
+                                    const balance = val.trim() === '' ? null : parseFloat(val.replace(/[$,]/g, ''));
+                                    if (val.trim() !== '' && isNaN(balance)) { alert('Enter a valid number.'); return; }
+                                    await api.put(`/plaid/balance-override/${a.account_id}`, { balance });
+                                    const { data } = await api.get('/plaid/accounts');
+                                    setAccounts(data.accounts || []);
+                                  }}
+                                  style={{ fontSize: 11, color: TEXT3, background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: 5, padding: '3px 8px', cursor: 'pointer', flexShrink: 0, marginBottom: 2 }}
+                                  title="Fix incorrect balance"
+                                >Fix balance</button>
+                              )}
                             </div>
                             {/* Row 5: view link + live indicator */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

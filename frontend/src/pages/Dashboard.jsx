@@ -17061,7 +17061,25 @@ export default function Dashboard() {
                               <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{a.name}</div>
                               <div style={{ fontSize: 11, color: TEXT3, marginTop: 1 }}>{typeLabel[a.subtype] || fmtAcctType(a.subtype, a.type)} · {a.institution_name}</div>
                             </div>
-                            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: GREEN }}>{fmt(a.balances.current)}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {a._balance_overridden && <span style={{ fontSize: 9, color: TEXT3, fontWeight: 600, letterSpacing: '0.4px' }}>OVERRIDDEN</span>}
+                              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: GREEN }}>{fmt(a.balances.current)}</div>
+                              {!a._manual && (
+                                <button
+                                  title="Fix incorrect balance"
+                                  onClick={async () => {
+                                    const val = window.prompt(`Override balance for "${a.name}":\n(Leave blank to clear override)`, a._balance_overridden ? a.balances.current : '');
+                                    if (val === null) return;
+                                    const balance = val.trim() === '' ? null : parseFloat(val.replace(/[$,]/g, ''));
+                                    if (val.trim() !== '' && isNaN(balance)) return alert('Enter a valid number.');
+                                    await api.put(`/plaid/balance-override/${a.account_id}`, { balance });
+                                    const { data } = await api.get('/plaid/accounts');
+                                    setAccounts(data.accounts || []);
+                                  }}
+                                  style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 12, padding: 2, lineHeight: 1 }}
+                                >✎</button>
+                              )}
+                            </div>
                           </div>
                         ))}
                         <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, fontSize: 13, fontWeight: 700 }}>

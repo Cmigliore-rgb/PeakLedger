@@ -134,7 +134,7 @@ router.get('/accounts', requireAuth, async (req, res) => {
   try {
     const { getAccounts } = require('../data_controller');
     const result = await getAccounts(req);
-    // Append manual accounts so they flow through all existing account-aware code
+    // Append manual accounts
     const manuals = db.prepare('SELECT * FROM manual_accounts WHERE user_id = ? ORDER BY created_at ASC').all(req.user.id);
     const manualFormatted = manuals.map(m => ({
       account_id: `manual_${m.id}`,
@@ -148,11 +148,39 @@ router.get('/accounts', requireAuth, async (req, res) => {
       _manual_id: m.id,
     }));
     result.accounts = [...(result.accounts || []), ...manualFormatted];
+
+    // Apply any balance overrides (e.g. to fix incorrect Plaid-reported values)
+    const overrides = db.prepare('SELECT account_id, balance FROM account_balance_overrides WHERE user_id = ?').all(req.user.id);
+    if (overrides.length) {
+      const overrideMap = Object.fromEntries(overrides.map(o => [o.account_id, o.balance]));
+      result.accounts = result.accounts.map(a => {
+        if (overrideMap[a.account_id] != null) {
+          return { ...a, balances: { ...a.balances, current: overrideMap[a.account_id] }, _balance_overridden: true };
+        }
+        return a;
+      });
+    }
+
     res.json(result);
   } catch (err) {
     console.error('accounts error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to load accounts' });
   }
+});
+
+// Set or clear a balance override for a specific account
+router.put('/balance-override/:account_id', requireAuth, (req, res) => {
+  const { balance } = req.body;
+  const { account_id } = req.params;
+  if (balance == null) {
+    db.prepare('DELETE FROM account_balance_overrides WHERE user_id = ? AND account_id = ?').run(req.user.id, account_id);
+    return res.json({ ok: true, cleared: true });
+  }
+  db.prepare(`
+    INSERT INTO account_balance_overrides (user_id, account_id, balance) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, account_id) DO UPDATE SET balance = excluded.balance
+  `).run(req.user.id, account_id, Number(balance));
+  res.json({ ok: true });
 });
 
 router.get('/liabilities', requireAuth, async (req, res) => {

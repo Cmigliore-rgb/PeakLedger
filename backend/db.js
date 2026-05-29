@@ -298,6 +298,17 @@ try {
   `);
 } catch {}
 
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS account_balance_overrides (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      account_id TEXT NOT NULL,
+      balance    REAL NOT NULL,
+      PRIMARY KEY (user_id, account_id)
+    )
+  `);
+} catch {}
+
 // Auto-verify admin and professor accounts
 db.prepare("UPDATE users SET email_verified = 1 WHERE role IN ('admin', 'professor') AND email_verified = 0").run();
 // Verify test account

@@ -3543,11 +3543,6 @@ export default function Dashboard() {
   const [tourStep, setTourStep] = useState(0);
   const [holdingsExpanded, setHoldingsExpanded] = useState(false);
   const [showManualHoldingForm, setShowManualHoldingForm] = useState(false);
-  const [screenerResults, setScreenerResults]   = useState(null);
-  const [screenerJob, setScreenerJob]           = useState({ running: false, progress: 0, total: 500, phase: '' });
-  const [screenerExpanded, setScreenerExpanded] = useState(null);
-  const [screenerDebug, setScreenerDebug]       = useState(null);
-  const [screenerDebugLoading, setScreenerDebugLoading] = useState(false);
   const [manualHoldingEdit, setManualHoldingEdit] = useState(null); // raw manual holding being edited
   const [manualHoldingForm, setManualHoldingForm] = useState({ ticker: '', name: '', asset_type: 'stock', shares: '', cost_per_share: '', manual_value: '', purchase_date: '' });
   const [manualHoldingSaving, setManualHoldingSaving] = useState(false);
@@ -4219,16 +4214,6 @@ export default function Dashboard() {
     return buildSortedSteps(base, ovOrd, cfOrd, inOrd, navOrd, baselineOn);
   };
 
-  const handleRunScreener = async () => {
-    try {
-      await api.post('/screener/run');
-      setScreenerJob({ running: true, progress: 0, total: 500, phase: 'Starting...' });
-      setScreenerExpanded(null);
-    } catch (e) {
-      alert(e.response?.data?.error || 'Failed to start screener.');
-    }
-  };
-
   const openTourAt = (stepIndex) => {
     const steps = getTourSteps();
     setStableTourSteps(steps);
@@ -4248,27 +4233,6 @@ export default function Dashboard() {
     mainRef.current.style.overflowY = showTour ? 'hidden' : 'auto';
   }, [showTour]);
 
-  // Load saved screener results when admin opens the investments panel
-  useEffect(() => {
-    if (panel !== 'investments' || !isAdmin) return;
-    api.get('/screener/results').then(({ data }) => setScreenerResults(data)).catch(() => {});
-  }, [panel]);
-
-  // Poll job status every 3s while screener is running
-  useEffect(() => {
-    if (!screenerJob.running) return;
-    const id = setInterval(async () => {
-      try {
-        const { data } = await api.get('/screener/status');
-        setScreenerJob(data);
-        if (!data.running) {
-          const { data: res } = await api.get('/screener/results');
-          setScreenerResults(res);
-        }
-      } catch {}
-    }, 3000);
-    return () => clearInterval(id);
-  }, [screenerJob.running]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -11658,7 +11622,24 @@ export default function Dashboard() {
                                   <td style={{ padding:'10px 12px', fontSize:13, color:TEXT2, maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</td>
                                   <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{h._manual && !h._manual_raw?.ticker ? '—' : qty.toFixed(3)}</td>
                                   <td style={{ padding:'10px 12px', textAlign:'right', fontFamily:'monospace', fontSize:13 }}>{h._manual && !h._manual_raw?.ticker ? '—' : fmt(price)}</td>
-                                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontFamily:'monospace' }}>{fmt(value)}</td>
+                                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600, fontFamily:'monospace' }}>
+                                    <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
+                                      {h._price_overridden && <span style={{ fontSize:9, color:TEXT3, fontWeight:600 }}>overridden</span>}
+                                      {fmt(value)}
+                                      {!h._manual && h.security_id && (
+                                        <button onClick={async e => {
+                                          e.stopPropagation();
+                                          const val = window.prompt(`Fix price per unit for "${h.security?.name || ticker}":\n(Leave blank to remove override)`, h._price_overridden ? price : '');
+                                          if (val === null) return;
+                                          const newPrice = val.trim() === '' ? null : parseFloat(val.replace(/[$,]/g, ''));
+                                          if (val.trim() !== '' && isNaN(newPrice)) { alert('Enter a valid number.'); return; }
+                                          await api.put(`/investments/price-override/${h.security_id}`, { price: newPrice });
+                                          const { data } = await api.get('/investments/holdings');
+                                          setHoldings(data.holdings || []);
+                                        }} style={{ fontSize:11, color:TEXT3, background:'none', border:`1px solid ${BORDER_C}`, borderRadius:5, padding:'2px 6px', cursor:'pointer', flexShrink:0 }} title="Fix incorrect price">✎</button>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td style={{ padding:'10px 12px', textAlign:'right' }}>
                                     {totalReturnPct==null ? <span style={{ color:TEXT3 }}>—</span> : (
                                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
@@ -12068,128 +12049,6 @@ export default function Dashboard() {
                   );
                 })()}
 
-                {/* ── Admin: Swing Screener ─────────────────────────────── */}
-                {isAdmin && (() => {
-                  const pct = screenerJob.total > 0 ? Math.min(100, (screenerJob.progress / screenerJob.total) * 100) : 0;
-                  return (
-                    <div style={{ marginTop: 40, paddingTop: 32, borderTop: BORDER }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                        <div>
-                          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.3px' }}>Swing Screener</div>
-                          {screenerResults?.run_date && (
-                            <div style={{ fontSize: 12, color: TEXT2, marginTop: 3 }}>
-                              Last run: {screenerResults.run_date}
-                              <span style={{ marginLeft: 10, color: screenerResults.regime_bullish ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-                                {screenerResults.regime_bullish ? 'Bullish' : 'Bearish'} regime
-                              </span>
-                              {screenerResults.message ? <span style={{ marginLeft: 8, color: TEXT3 }}>{screenerResults.message}</span> : null}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={handleRunScreener}
-                          disabled={screenerJob.running}
-                          style={{ padding: '9px 22px', borderRadius: 8, border: 'none', background: screenerJob.running ? MUTED : BLUE_BTN, color: screenerJob.running ? TEXT2 : '#fff', fontSize: 13, fontWeight: 700, cursor: screenerJob.running ? 'not-allowed' : 'pointer', flexShrink: 0 }}
-                        >
-                          {screenerJob.running ? 'Running...' : 'Run Screener'}
-                        </button>
-                      </div>
-
-                      {screenerJob.running && (
-                        <div className="lc" style={{ ...CARD, padding: '16px 20px', marginBottom: 20 }}>
-                          <div style={{ fontSize: 12, color: TEXT2, marginBottom: 10 }}>{screenerJob.phase}</div>
-                          <div style={{ background: DARK, borderRadius: 6, height: 6, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', borderRadius: 6, background: BLUE, width: `${pct}%`, transition: 'width 0.5s ease' }} />
-                          </div>
-                          <div style={{ fontSize: 11, color: TEXT3, marginTop: 8 }}>{screenerJob.progress} / {screenerJob.total} tickers scanned</div>
-                        </div>
-                      )}
-
-                      {!screenerJob.running && screenerJob.error && (
-                        <div style={{ fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-                          <strong>Error:</strong> {screenerJob.error}
-                        </div>
-                      )}
-                      {!screenerJob.running && (
-                        <div style={{ marginBottom: 16 }}>
-                          <button
-                            onClick={async () => { setScreenerDebugLoading(true); setScreenerDebug(null); try { const { data } = await api.get('/screener/debug'); setScreenerDebug(data); } catch (e) { setScreenerDebug({ error: e.message }); } finally { setScreenerDebugLoading(false); } }}
-                            disabled={screenerDebugLoading}
-                            style={{ fontSize: 11, color: TEXT3, background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
-                          >
-                            {screenerDebugLoading ? 'Testing...' : 'Test Connection'}
-                          </button>
-                          {screenerDebug && (
-                            <pre style={{ marginTop: 10, fontSize: 11, color: TEXT2, background: DARK, borderRadius: 8, padding: 12, overflowX: 'auto', lineHeight: 1.6 }}>
-                              {JSON.stringify(screenerDebug, null, 2)}
-                            </pre>
-                          )}
-                        </div>
-                      )}
-
-                      {!screenerJob.running && screenerResults?.regime_bullish === false && (
-                        <div style={{ fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-                          SPY is below its 50-day SMA. Bearish regime active. No setups generated.
-                        </div>
-                      )}
-
-                      {!screenerJob.running && screenerResults?.setups?.length > 0 && (
-                        <div className="lc" style={{ ...CARD, overflow: 'hidden' }}>
-                          <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 680 }}>
-                              <thead>
-                                <tr style={{ borderBottom: BORDER }}>
-                                  {['#', 'Ticker', 'Signal', 'Price', 'ROC%', 'RSI', 'EMA Dist', 'Stop', 'Target', 'Shares', 'Risk$'].map(h => (
-                                    <th key={h} style={{ padding: '10px 12px', textAlign: h === '#' || h === 'Ticker' || h === 'Signal' ? 'left' : 'right', color: TEXT2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {screenerResults.setups.map((s, i) => (
-                                  <React.Fragment key={s.ticker}>
-                                    <tr
-                                      onClick={() => setScreenerExpanded(screenerExpanded === s.ticker ? null : s.ticker)}
-                                      style={{ borderBottom: `1px solid ${BORDER_C}`, cursor: 'pointer', background: screenerExpanded === s.ticker ? 'rgba(77,163,255,0.05)' : 'transparent' }}
-                                    >
-                                      <td style={{ padding: '11px 12px', color: TEXT3, fontWeight: 600 }}>{i + 1}</td>
-                                      <td style={{ padding: '11px 12px', fontWeight: 700, color: BLUE }}>{s.ticker}</td>
-                                      <td style={{ padding: '11px 12px' }}>
-                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 5, background: s.signal === 'STRONG' ? 'rgba(74,222,128,0.15)' : s.signal === 'BORDERLINE' ? 'rgba(251,191,36,0.15)' : 'rgba(248,113,113,0.15)', color: s.signal === 'STRONG' ? '#4ade80' : s.signal === 'BORDERLINE' ? '#fbbf24' : '#f87171' }}>
-                                          {s.signal} {s.score}/5
-                                        </span>
-                                      </td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>${s.price}</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 600, fontFamily: 'monospace' }}>+{s.roc_pct}%</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{s.rsi}</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: s.ema_dist_pct > 0 ? '#4ade80' : '#f87171', fontFamily: 'monospace' }}>{s.ema_dist_pct > 0 ? '+' : ''}{s.ema_dist_pct}%</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: '#f87171', fontFamily: 'monospace' }}>${s.stop_loss}</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: '#4ade80', fontFamily: 'monospace' }}>${s.target}</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', fontFamily: 'monospace' }}>{s.shares}</td>
-                                      <td style={{ padding: '11px 12px', textAlign: 'right', color: TEXT2, fontFamily: 'monospace' }}>${s.risk_dollars}</td>
-                                    </tr>
-                                    {screenerExpanded === s.ticker && s.brief && (
-                                      <tr style={{ borderBottom: `1px solid ${BORDER_C}` }}>
-                                        <td colSpan={11} style={{ padding: '14px 16px', background: 'rgba(77,163,255,0.03)' }}>
-                                          <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.7, maxWidth: 720 }}>{s.brief}</div>
-                                        </td>
-                                      </tr>
-                                    )}
-                                  </React.Fragment>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-
-                      {!screenerJob.running && !screenerResults?.run_date && (
-                        <div style={{ fontSize: 13, color: TEXT3, textAlign: 'center', padding: '36px 0', border: BORDER, borderRadius: 10 }}>
-                          No screener run yet. Click Run Screener to scan the S&P 500 for swing setups.
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
 
               </div>
             )}

@@ -55,7 +55,6 @@ const feedbackRoutes = require('./routes/feedback');
 const baselineRoutes = require('./routes/baseline');
 const stripeRoutes   = require('./routes/stripe');
 const calendarRoutes = require('./routes/calendar');
-const screenerRoutes = require('./routes/screener');
 const store = require('./store');
 
 const app = express();
@@ -129,7 +128,6 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/baseline', baselineRoutes);
 app.use('/api/calendar', calendarRoutes);
-app.use('/api/screener', screenerRoutes);
 
 Sentry.setupExpressErrorHandler(app);
 

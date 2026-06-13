@@ -300,6 +300,17 @@ try {
 
 try {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS holding_price_overrides (
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      security_id TEXT NOT NULL,
+      price       REAL NOT NULL,
+      PRIMARY KEY (user_id, security_id)
+    )
+  `);
+} catch {}
+
+try {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS account_balance_overrides (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       account_id TEXT NOT NULL,

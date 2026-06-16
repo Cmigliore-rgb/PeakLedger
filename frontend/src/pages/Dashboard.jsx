@@ -9496,12 +9496,34 @@ export default function Dashboard() {
                               <div style={{ marginTop: 20, borderTop: `1px solid ${BORDER_C}`, paddingTop: 16 }}>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Transactions</div>
                                 {selMonth.txns.sort((a, b) => new Date(b.date) - new Date(a.date)).map((t, i) => (
-                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: i < selMonth.txns.length - 1 ? `1px solid ${BORDER_C}` : 'none' }}>
-                                    <div>
+                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: i < selMonth.txns.length - 1 ? `1px solid ${BORDER_C}` : 'none', gap: 10 }}>
+                                    <div style={{ minWidth: 0 }}>
                                       <div style={{ fontWeight: 500, fontSize: 13 }}>{t.merchant_name || t.name}</div>
-                                      <div style={{ fontSize: 11, color: TEXT2 }}>{fmtDate(t.date)}</div>
+                                      <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>{fmtDate(t.date)}</div>
                                     </div>
-                                    <div style={{ fontWeight: 600, color: GREEN, fontFamily: 'monospace', fontSize: 13 }}>+{fmt(Math.abs(t.amount))}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                      {t.transaction_id && (
+                                        <div style={{ position: 'relative' }}>
+                                          <button
+                                            onClick={() => setRecatOpen(recatOpen === t.transaction_id ? null : t.transaction_id)}
+                                            style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.15)' : MUTED, border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.4)` : BORDER, borderRadius: 20, padding: '3px 10px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                                          >
+                                            {fmtCat(resolveCategory(t))} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+                                          </button>
+                                          {recatOpen === t.transaction_id && (
+                                            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 300, background: CARD_BG, border: BORDER, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 180, maxHeight: 220, overflowY: 'auto', padding: '4px 0' }}>
+                                              {txnCategoryOverrides[t.transaction_id] && (
+                                                <button onClick={() => { saveCatOverride(t.transaction_id, null); setRecatOpen(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: BLUE, fontWeight: 600, borderBottom: BORDER }}>↩ Reset to original</button>
+                                              )}
+                                              {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+                                                <button key={k} onClick={() => { saveCatOverride(t.transaction_id, k); setRecatOpen(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 14px', background: resolveCategory(t) === k ? 'rgba(77,163,255,0.1)' : 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: resolveCategory(t) === k ? BLUE : TEXT, fontWeight: resolveCategory(t) === k ? 600 : 400 }}>{v}</button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      <div style={{ fontWeight: 600, color: GREEN, fontFamily: 'monospace', fontSize: 13 }}>+{fmt(Math.abs(t.amount))}</div>
+                                    </div>
                                   </div>
                                 ))}
                               </div>

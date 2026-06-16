@@ -7412,7 +7412,7 @@ export default function Dashboard() {
                                   <div style={{ position: 'relative', display: 'inline-block' }}>
                                     <button
                                       onClick={e => { e.stopPropagation(); setRecatOpen(recatOpen === t.transaction_id ? null : t.transaction_id); }}
-                                      style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.1)' : 'none', border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.35)` : '1px solid transparent', borderRadius: 6, padding: '1px 6px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                                      style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.15)' : MUTED, border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.4)` : BORDER, borderRadius: 20, padding: '3px 10px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
                                     >
                                       {fmtCat(resolveCategory(t))} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
                                     </button>
@@ -8673,7 +8673,7 @@ export default function Dashboard() {
                                         <div style={{ position: 'relative', display: 'inline-block' }}>
                                           <button
                                             onClick={e => { e.stopPropagation(); setRecatOpen(recatOpen === t.transaction_id ? null : t.transaction_id); }}
-                                            style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.1)' : 'none', border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.35)` : '1px solid transparent', borderRadius: 6, padding: '2px 8px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                                            style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.15)' : MUTED, border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.4)` : BORDER, borderRadius: 20, padding: '3px 10px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
                                           >
                                             {fmtCat(resolveCategory(t)) || '—'} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
                                           </button>

@@ -7409,7 +7409,24 @@ export default function Dashboard() {
                                 <CompanyLogo name={t.merchant_name || t.name} logoUrl={t.logo_url} size={32} radius={8} />
                                 <div style={{ minWidth: 0 }}>
                                   <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.merchant_name || t.name}</div>
-                                  <div style={{ fontSize: 12, color: TEXT2 }}>{fmtCat(resolveCategory(t))}</div>
+                                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                                    <button
+                                      onClick={e => { e.stopPropagation(); setRecatOpen(recatOpen === t.transaction_id ? null : t.transaction_id); }}
+                                      style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.1)' : 'none', border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.35)` : '1px solid transparent', borderRadius: 6, padding: '1px 6px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                                    >
+                                      {fmtCat(resolveCategory(t))} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+                                    </button>
+                                    {recatOpen === t.transaction_id && (
+                                      <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 4px)', zIndex: 300, background: CARD_BG, border: BORDER, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 180, maxHeight: 220, overflowY: 'auto', padding: '4px 0' }}>
+                                        {txnCategoryOverrides[t.transaction_id] && (
+                                          <button onClick={() => { saveCatOverride(t.transaction_id, null); setRecatOpen(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: BLUE, fontWeight: 600, borderBottom: BORDER }}>↩ Reset to original</button>
+                                        )}
+                                        {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+                                          <button key={k} onClick={() => { saveCatOverride(t.transaction_id, k); setRecatOpen(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 14px', background: resolveCategory(t) === k ? 'rgba(77,163,255,0.1)' : 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: resolveCategory(t) === k ? BLUE : TEXT, fontWeight: resolveCategory(t) === k ? 600 : 400 }}>{v}</button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               <div style={{ fontWeight: 600, color: t.amount > 0 ? RED : GREEN, fontFamily: 'monospace', flexShrink: 0 }}>
@@ -8652,7 +8669,26 @@ export default function Dashboard() {
                                           </div>
                                         </div>
                                       </td>
-                                      {!isMobile && <td style={{ padding: '8px 12px', color: TEXT2, fontSize: 12 }}>{fmtCat(resolveCategory(t)) || '—'}</td>}
+                                      {!isMobile && <td style={{ padding: '8px 12px', fontSize: 12 }}>
+                                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                                          <button
+                                            onClick={e => { e.stopPropagation(); setRecatOpen(recatOpen === t.transaction_id ? null : t.transaction_id); }}
+                                            style={{ background: txnCategoryOverrides[t.transaction_id] ? 'rgba(77,163,255,0.1)' : 'none', border: txnCategoryOverrides[t.transaction_id] ? `1px solid rgba(77,163,255,0.35)` : '1px solid transparent', borderRadius: 6, padding: '2px 8px', color: txnCategoryOverrides[t.transaction_id] ? BLUE : TEXT2, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                                          >
+                                            {fmtCat(resolveCategory(t)) || '—'} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+                                          </button>
+                                          {recatOpen === t.transaction_id && (
+                                            <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 4px)', zIndex: 300, background: CARD_BG, border: BORDER, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', minWidth: 180, maxHeight: 220, overflowY: 'auto', padding: '4px 0' }}>
+                                              {txnCategoryOverrides[t.transaction_id] && (
+                                                <button onClick={() => { saveCatOverride(t.transaction_id, null); setRecatOpen(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: BLUE, fontWeight: 600, borderBottom: BORDER }}>↩ Reset to original</button>
+                                              )}
+                                              {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+                                                <button key={k} onClick={() => { saveCatOverride(t.transaction_id, k); setRecatOpen(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 14px', background: resolveCategory(t) === k ? 'rgba(77,163,255,0.1)' : 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: resolveCategory(t) === k ? BLUE : TEXT, fontWeight: resolveCategory(t) === k ? 600 : 400 }}>{v}</button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>}
                                       <td style={{ padding: '8px 12px', fontWeight: 600, color: t.amount > 0 ? RED : GREEN, textAlign: 'right', fontFamily: 'monospace', fontSize: 13, whiteSpace: 'nowrap' }}>
                                         {t.amount > 0 ? '−' : '+'}{fmt(Math.abs(t.amount))}
                                       </td>
@@ -8754,7 +8790,7 @@ export default function Dashboard() {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block', boxShadow: '0 0 0 2px rgba(74,222,128,0.25)' }} />
                                 <span style={{ fontSize: 10, color: '#4ade80', fontWeight: 600 }}>Live</span>
-                                {lastSynced && <span style={{ fontSize: 10, color: TEXT3 }}>· {Math.round((Date.now() - lastSynced) / 60000) < 1 ? 'just now' : `${Math.round((Date.now() - lastSynced) / 60000)}m ago`}</span>}
+                                {lastSynced && <span style={{ fontSize: 10, color: TEXT3 }}>· {(() => { const ms = Date.now() - lastSynced; const mins = Math.round(ms / 60000); if (mins < 1) return 'just now'; if (mins < 60) return `${mins}m ago`; const hrs = Math.round(ms / 3600000); if (hrs < 24) return `${hrs}h ago`; const days = Math.round(ms / 86400000); if (days < 7) return `${days}d ago`; return new Date(lastSynced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()}</span>}
                               </div>
                             </div>
                           </div>

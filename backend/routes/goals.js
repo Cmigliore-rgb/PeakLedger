@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const requireAuth = require('../middleware/requireAuth');
 
-const toClient = g => ({ ...g, accountId: g.account_id });
+const toClient = g => ({ ...g, accountId: g.account_id, manualBalance: g.manual_balance ?? 0 });
 
 router.get('/', requireAuth, (req, res) => {
   const goals = db.prepare('SELECT * FROM goals WHERE user_id = ? ORDER BY created_at ASC').all(req.user.id);
@@ -29,6 +29,16 @@ router.put('/:id', requireAuth, (req, res) => {
     accountId !== undefined ? (accountId || null) : existing.account_id,
     req.params.id, req.user.id
   );
+  const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id);
+  res.json({ goal: toClient(goal) });
+});
+
+router.patch('/:id/manual-balance', requireAuth, (req, res) => {
+  const { balance } = req.body;
+  const existing = db.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  db.prepare('UPDATE goals SET manual_balance = ? WHERE id = ? AND user_id = ?')
+    .run(balance != null ? Number(balance) : 0, req.params.id, req.user.id);
   const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id);
   res.json({ goal: toClient(goal) });
 });

@@ -3457,6 +3457,7 @@ export default function Dashboard() {
   const [goals, setGoals] = useState([]);
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
+  const [goalManualEdit, setGoalManualEdit] = useState(null);
   const [goalForm, setGoalForm] = useState({ name: '', target: '', accountId: '' });
   const [notifPrefs, setNotifPrefs] = useState({ email: '', budgetAlert: true, budgetThreshold: 80, categoryThresholds: {}, goalAlert: true, lowBalanceAlert: true, lowBalanceAmt: 50, emailUnsubscribed: false, weeklyDigest: false });
   const [categoryEmojis, setCategoryEmojis] = React.useState({});
@@ -4427,7 +4428,7 @@ export default function Dashboard() {
     if (notifPrefs.goalAlert) {
       goals.forEach(g => {
         const acct = accounts.find(a => a.account_id === g.accountId);
-        const current = acct ? (acct.balances?.current || 0) : 0;
+        const current = acct ? (acct.balances?.current || 0) : (g.manualBalance || 0);
         const pct = g.target > 0 ? (current / g.target) * 100 : 0;
         if (pct >= 100) {
           trigger('goal_reached', `You reached your goal: ${g.name}!`, { goalName: g.name, current: fmt(current), target: fmt(g.target), message: "You did it! Goal complete." }, `goal_100_${g.id}`);
@@ -7335,7 +7336,7 @@ export default function Dashboard() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                       {goals.map(goal => {
                         const acct    = accounts.find(a => a.account_id === goal.accountId);
-                        const current = acct ? (acct.balances?.current || 0) : 0;
+                        const current = acct ? (acct.balances?.current || 0) : (goal.manualBalance || 0);
                         const pct     = Math.min((current / goal.target) * 100, 100);
                         const done    = current >= goal.target;
                         const barColor = done ? GREEN : pct >= 75 ? BLUE : BLUE_BTN;
@@ -7344,7 +7345,7 @@ export default function Dashboard() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                               <div>
                                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{goal.name}</div>
-                                <div style={{ fontSize: 11, color: TEXT3 }}>{acct ? acct.name : 'No account linked'}</div>
+                                <div style={{ fontSize: 11, color: TEXT3 }}>{acct ? acct.name : goal.manualBalance > 0 ? 'Manually tracked' : 'No account linked'}</div>
                               </div>
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                 {done && <span style={{ fontSize: 9, fontWeight: 700, color: GREEN, background: 'rgba(74,222,128,0.12)', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>Done</span>}
@@ -7355,15 +7356,24 @@ export default function Dashboard() {
                               </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', color: done ? GREEN : TEXT }}>{acct ? fmt(current) : '—'}</span>
+                              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', color: done ? GREEN : TEXT }}>{(acct || current > 0) ? fmt(current) : '—'}</span>
                               <span style={{ fontSize: 12, color: TEXT2 }}>of {fmt(goal.target)}</span>
                             </div>
                             <div style={{ height: 6, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${acct ? pct : 0}%`, background: barColor, borderRadius: 3, transition: 'width 0.4s ease' }} />
+                              <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 3, transition: 'width 0.4s ease' }} />
                             </div>
-                            <div style={{ fontSize: 11, color: TEXT3, marginTop: 5 }}>
-                              {acct ? `${pct.toFixed(0)}% · ${done ? 'Goal reached!' : fmt(goal.target - current) + ' to go'}` : 'Link an account to track'}
+                            <div style={{ fontSize: 11, color: TEXT3, marginTop: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{(acct || current > 0) ? `${pct.toFixed(0)}% · ${done ? 'Goal reached!' : fmt(goal.target - current) + ' to go'}` : 'No balance entered'}</span>
+                              {!acct && <button onClick={() => setGoalManualEdit({ id: goal.id, value: String(goal.manualBalance || '') })} style={{ background: 'none', border: 'none', color: BLUE, cursor: 'pointer', fontSize: 11, padding: 0 }}>{goal.manualBalance > 0 ? 'Update' : '+ Add'}</button>}
                             </div>
+                            {!acct && goalManualEdit?.id === goal.id && (
+                              <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 6 }}>
+                                <input type="number" value={goalManualEdit.value} onChange={e => setGoalManualEdit(m => ({ ...m, value: e.target.value }))} placeholder="Amount saved" autoFocus
+                                  style={{ flex: 1, padding: '4px 7px', background: MUTED, border: BORDER, borderRadius: 5, color: TEXT, fontSize: 12, outline: 'none' }} />
+                                <button onClick={async () => { const res = await api.patch(`/goals/${goal.id}/manual-balance`, { balance: parseFloat(goalManualEdit.value) || 0 }); setGoals(prev => prev.map(g => g.id === goal.id ? res.data.goal : g)); setGoalManualEdit(null); }} style={{ padding: '4px 8px', background: BLUE_BTN, color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>Save</button>
+                                <button onClick={() => setGoalManualEdit(null)} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 12, padding: '0 2px', flexShrink: 0 }}>✕</button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -7933,7 +7943,7 @@ export default function Dashboard() {
                             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 12 }}>
                               {goals.map(goal => {
                                 const acct    = accounts.find(a => a.account_id === goal.accountId);
-                                const current = acct ? (acct.balances?.current || 0) : 0;
+                                const current = acct ? (acct.balances?.current || 0) : (goal.manualBalance || 0);
                                 const pct     = Math.min((current / goal.target) * 100, 100);
                                 const done    = current >= goal.target;
                                 const barColor = done ? GREEN : pct >= 75 ? BLUE : BLUE_BTN;
@@ -7942,7 +7952,7 @@ export default function Dashboard() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                                       <div>
                                         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{goal.name}</div>
-                                        <div style={{ fontSize: 11, color: TEXT3 }}>{acct ? acct.name : 'No account linked'}</div>
+                                        <div style={{ fontSize: 11, color: TEXT3 }}>{acct ? acct.name : goal.manualBalance > 0 ? 'Manually tracked' : 'No account linked'}</div>
                                       </div>
                                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                         {done && <span style={{ fontSize: 9, fontWeight: 700, color: GREEN, background: 'rgba(74,222,128,0.12)', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>Done</span>}
@@ -7953,15 +7963,24 @@ export default function Dashboard() {
                                       </div>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                                      <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', color: done ? GREEN : TEXT }}>{acct ? fmt(current) : '—'}</span>
+                                      <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', color: done ? GREEN : TEXT }}>{(acct || current > 0) ? fmt(current) : '—'}</span>
                                       <span style={{ fontSize: 12, color: TEXT2 }}>of {fmt(goal.target)}</span>
                                     </div>
                                     <div style={{ height: 6, background: MUTED, borderRadius: 3, overflow: 'hidden' }}>
-                                      <div style={{ height: '100%', width: `${acct ? pct : 0}%`, background: barColor, borderRadius: 3, transition: 'width 0.4s ease' }} />
+                                      <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 3, transition: 'width 0.4s ease' }} />
                                     </div>
-                                    <div style={{ fontSize: 11, color: TEXT3, marginTop: 5 }}>
-                                      {acct ? `${pct.toFixed(0)}% · ${done ? 'Goal reached!' : fmt(goal.target - current) + ' to go'}` : 'Link an account to track'}
+                                    <div style={{ fontSize: 11, color: TEXT3, marginTop: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span>{(acct || current > 0) ? `${pct.toFixed(0)}% · ${done ? 'Goal reached!' : fmt(goal.target - current) + ' to go'}` : 'No balance entered'}</span>
+                                      {!acct && <button onClick={() => setGoalManualEdit({ id: goal.id, value: String(goal.manualBalance || '') })} style={{ background: 'none', border: 'none', color: BLUE, cursor: 'pointer', fontSize: 11, padding: 0 }}>{goal.manualBalance > 0 ? 'Update' : '+ Add'}</button>}
                                     </div>
+                                    {!acct && goalManualEdit?.id === goal.id && (
+                                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 6 }}>
+                                        <input type="number" value={goalManualEdit.value} onChange={e => setGoalManualEdit(m => ({ ...m, value: e.target.value }))} placeholder="Amount saved" autoFocus
+                                          style={{ flex: 1, padding: '4px 7px', background: MUTED, border: BORDER, borderRadius: 5, color: TEXT, fontSize: 12, outline: 'none' }} />
+                                        <button onClick={async () => { const res = await api.patch(`/goals/${goal.id}/manual-balance`, { balance: parseFloat(goalManualEdit.value) || 0 }); setGoals(prev => prev.map(g => g.id === goal.id ? res.data.goal : g)); setGoalManualEdit(null); }} style={{ padding: '4px 8px', background: BLUE_BTN, color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>Save</button>
+                                        <button onClick={() => setGoalManualEdit(null)} style={{ background: 'none', border: 'none', color: TEXT3, cursor: 'pointer', fontSize: 12, padding: '0 2px', flexShrink: 0 }}>✕</button>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}

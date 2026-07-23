@@ -245,11 +245,13 @@ try {
       name TEXT NOT NULL,
       target REAL NOT NULL,
       account_id TEXT,
+      manual_balance REAL NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `);
 } catch {}
+try { db.exec('ALTER TABLE goals ADD COLUMN manual_balance REAL NOT NULL DEFAULT 0'); } catch {}
 
 try {
   db.exec(`

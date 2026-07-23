@@ -725,7 +725,7 @@ function PieDonut({ slices, size = 140, onSliceClick }) {
 }
 
 // Simple SVG line chart
-function NetWorthChart({ snapshots }) {
+function NetWorthChart({ snapshots, onFixPoint }) {
   const [period, setPeriod] = useState(30);
   const [hoverIdx, setHoverIdx] = useState(null);
   const svgRef = useRef(null);
@@ -841,6 +841,12 @@ function NetWorthChart({ snapshots }) {
           <div style={{ background: DARK, border: BORDER, borderRadius: 7, padding: '5px 12px', display: 'inline-flex', gap: 14, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: TEXT3 }}>{new Date(hSnap.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: hSnap.value >= 0 ? TEXT : RED }}>{hSnap.value < 0 ? '−' : ''}{fmt(Math.abs(hSnap.value))}</span>
+            {onFixPoint && (
+              <button onClick={() => onFixPoint(hSnap.date, hSnap.value)} title="Correct or remove this data point"
+                style={{ background: 'none', border: `1px solid ${BORDER_C}`, borderRadius: 5, color: TEXT3, fontSize: 10, fontWeight: 600, padding: '2px 6px', cursor: 'pointer' }}>
+                Fix
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -3446,6 +3452,20 @@ export default function Dashboard() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [snapshots, setSnapshots] = useState([]);
+  const fixSnapshotPoint = React.useCallback(async (date, currentValue) => {
+    const input = window.prompt(`Correct net worth for ${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}:\n(Leave blank to remove this data point, e.g. a one-time data-entry mistake)`, Math.round(currentValue));
+    if (input === null) return;
+    const trimmed = input.trim();
+    if (trimmed === '') {
+      await api.delete(`/snapshots/${date}`).catch(() => {});
+      setSnapshots(prev => prev.filter(s => s.date !== date));
+    } else {
+      const value = parseFloat(trimmed);
+      if (Number.isNaN(value)) return;
+      await api.put(`/snapshots/${date}`, { netWorth: value }).catch(() => {});
+      setSnapshots(prev => prev.map(s => s.date === date ? { ...s, value } : s));
+    }
+  }, []);
   const [baselineData, setBaselineData] = useState(null);
   const [baselineRefreshing, setBaselineRefreshing] = useState(false);
   const [budgetLimits, setBudgetLimits] = useState({});
@@ -7864,7 +7884,7 @@ export default function Dashboard() {
                               Demo data. Connect an account to see your real history.
                             </div>
                           )}
-                          <NetWorthChart snapshots={isDemoData ? DEMO_SNAPSHOTS : snapshots} />
+                          <NetWorthChart snapshots={isDemoData ? DEMO_SNAPSHOTS : snapshots} onFixPoint={isDemoData ? null : fixSnapshotPoint} />
                         </div>
                       );
                       case 'goals': return (

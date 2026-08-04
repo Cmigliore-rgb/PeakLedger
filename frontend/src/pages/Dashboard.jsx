@@ -1523,6 +1523,11 @@ function isTransfer(txn) {
   // Legacy Plaid taxonomy: category[0] === 'Transfer' covers inter-account moves
   const legacyCat = (txn.category?.[0] || '').toLowerCase();
   if (legacyCat === 'transfer') return true;
+  // Only fall back to sniffing the raw description when Plaid gave no structured category
+  // at all. Once Plaid has definitively categorized a transaction as something else (e.g.
+  // Income), a processor's ACH descriptor merely containing the word "transfer" — common
+  // for payroll routed through a processor like Fiserv — shouldn't override that.
+  if (newCat || legacyCat) return false;
   const name = (txn.merchant_name || txn.name || '').toLowerCase();
   return /\b(online transfer|account transfer|zelle transfer|transfer (from|to|between))/i.test(name);
 }

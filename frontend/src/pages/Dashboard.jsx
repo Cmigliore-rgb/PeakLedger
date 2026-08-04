@@ -6216,7 +6216,7 @@ export default function Dashboard() {
         const lmTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= lmStart && d <= lmEnd; });
         const _mrHasCCAccts = activeAccounts.some(a => a.type === 'credit');
         const INCOME_CATS_MR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
-        const isIncMR = t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_MR].some(k => cat.includes(k)); };
+        const isIncMR = t => { if (t.amount >= 0) return false; const ovMR = t.transaction_id && txnCategoryOverrides[t.transaction_id]; if (ovMR) return ovMR === 'INCOME'; if (isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_MR].some(k => cat.includes(k)); };
         const isExpMR = t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_mrHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; };
         const mInc  = mTxns.filter(isIncMR).reduce((s, t) => s + Math.abs(t.amount), 0);
         const mExp  = mTxns.filter(isExpMR).reduce((s, t) => s + t.amount, 0);
@@ -7204,7 +7204,10 @@ export default function Dashboard() {
                     const monthTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= monthStart && d <= now; });
                     const INCOME_CATS_SR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
                     monthIncome   = monthTxns.filter(t => {
-                      if (t.amount >= 0 || isTransfer(t)) return false;
+                      if (t.amount >= 0) return false;
+                      const ovSR = t.transaction_id && txnCategoryOverrides[t.transaction_id];
+                      if (ovSR) return ovSR === 'INCOME';
+                      if (isTransfer(t)) return false;
                       const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
                       return [...INCOME_CATS_SR].some(k => cat.includes(k));
                     }).reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -7818,7 +7821,10 @@ export default function Dashboard() {
                           const monthTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= monthStart && d <= now; });
                           const INCOME_CATS_SR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
                           monthIncome = monthTxns.filter(t => {
-                            if (t.amount >= 0 || isTransfer(t)) return false;
+                            if (t.amount >= 0) return false;
+                            const ovSR = t.transaction_id && txnCategoryOverrides[t.transaction_id];
+                            if (ovSR) return ovSR === 'INCOME';
+                            if (isTransfer(t)) return false;
                             const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
                             return [...INCOME_CATS_SR].some(k => cat.includes(k));
                           }).reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -9325,6 +9331,8 @@ export default function Dashboard() {
                   const INCOME_CATS = new Set(['income', 'transfer in', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'rent', 'financial aid']);
                   const isIncomeTxn = t => {
                     if (t.amount >= 0) return false;
+                    const ov = t.transaction_id && txnCategoryOverrides[t.transaction_id];
+                    if (ov) return ov === 'INCOME';
                     if (isTransfer(t)) return false;
                     const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
                     return [...INCOME_CATS].some(k => cat.includes(k));
@@ -9435,7 +9443,7 @@ export default function Dashboard() {
                           const _hasCCAccts = activeAccounts.some(a => a.type === 'credit');
                           const INCOME_CATS_SR2 = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
                           expByMonth.push(allTxns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0));
-                          incByMonth.push(allTxns.filter(t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_SR2].some(k => cat.includes(k)); }).reduce((s, t) => s + Math.abs(t.amount), 0));
+                          incByMonth.push(allTxns.filter(t => { if (t.amount >= 0) return false; const ovSR2 = t.transaction_id && txnCategoryOverrides[t.transaction_id]; if (ovSR2) return ovSR2 === 'INCOME'; if (isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_SR2].some(k => cat.includes(k)); }).reduce((s, t) => s + Math.abs(t.amount), 0));
                         }
                         const MOCK_EXP = [1180, 1540, 980, 1320, 1110, 1500];
                         const MOCK_INC = [1420, 1850, 1200, 1550, 1350, 1800];
@@ -10219,7 +10227,7 @@ export default function Dashboard() {
                   const thisTxns = activeTxns.filter(t => inRange(t, thisMonthStart, now));
                   const lastTxns = activeTxns.filter(t => inRange(t, lastMonthStart, lastMonthEnd));
                   const INCOME_CATS_TR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
-                  const income   = txns => txns.filter(t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_TR].some(k => cat.includes(k)); }).reduce((s, t) => s + Math.abs(t.amount), 0);
+                  const income   = txns => txns.filter(t => { if (t.amount >= 0) return false; const ovTR = t.transaction_id && txnCategoryOverrides[t.transaction_id]; if (ovTR) return ovTR === 'INCOME'; if (isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_TR].some(k => cat.includes(k)); }).reduce((s, t) => s + Math.abs(t.amount), 0);
                   const hasCreditAccounts = activeAccounts.some(a => a.type === 'credit');
                   const expenses = txns => txns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (hasCreditAccounts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0);
                   const thisIncome = income(thisTxns), thisExpenses = expenses(thisTxns);

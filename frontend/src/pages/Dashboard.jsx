@@ -173,8 +173,14 @@ const fmt = (n) =>
     ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : '—';
 
+// Plaid dates are date-only ("YYYY-MM-DD"). `new Date(str)` parses that as UTC midnight,
+// which rolls back to the previous calendar day in any timezone behind UTC (all of the US) —
+// a transaction dated the 1st can silently fall into the prior month's bucket. Anchor to local
+// noon instead so day-of-month comparisons and display always match the date Plaid reported.
+const txnDate = (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00') : new Date(NaN);
+
 const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  d ? txnDate(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 
 const MANUAL_TYPE_OPTIONS = [
   { label: 'Checking',     type: 'depository', subtype: 'checking' },
@@ -839,7 +845,7 @@ function NetWorthChart({ snapshots, onFixPoint }) {
       {hSnap && (
         <div style={{ display: 'flex', justifyContent: tipOnLeft ? 'flex-start' : 'flex-end', marginBottom: 4 }}>
           <div style={{ background: DARK, border: BORDER, borderRadius: 7, padding: '5px 12px', display: 'inline-flex', gap: 14, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: TEXT3 }}>{new Date(hSnap.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span style={{ fontSize: 11, color: TEXT3 }}>{txnDate(hSnap.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: hSnap.value >= 0 ? TEXT : RED }}>{hSnap.value < 0 ? '−' : ''}{fmt(Math.abs(hSnap.value))}</span>
             {onFixPoint && (
               <button onClick={() => onFixPoint(hSnap.date, hSnap.value)} title="Correct or remove this data point"
@@ -4285,7 +4291,7 @@ export default function Dashboard() {
 
       const plaidTxns = txns.status       === 'fulfilled' ? txns.value.data.transactions      || [] : [];
       const tTxns     = tellerTxns.status === 'fulfilled' ? tellerTxns.value.data.transactions || [] : [];
-      const allTxns   = [...plaidTxns, ...tTxns].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const allTxns   = [...plaidTxns, ...tTxns].sort((a, b) => txnDate(b.date) - txnDate(a.date));
       setTransactions(allTxns);
 
       // New-transaction detection: compare against last-seen date for this user
@@ -4303,7 +4309,7 @@ export default function Dashboard() {
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       const byCategory = {};
       allTxns
-        .filter(t => t.amount > 0 && new Date(t.date) >= monthStart)
+        .filter(t => t.amount > 0 && txnDate(t.date) >= monthStart)
         .forEach(t => {
           const cat = resolveCategory(t);
           byCategory[cat] = (byCategory[cat] || 0) + t.amount;
@@ -4800,7 +4806,7 @@ export default function Dashboard() {
   const _spendMonthStart = new Date(_spendNow.getFullYear(), _spendNow.getMonth(), 1);
   const _hasCreditAccts = activeAccounts.some(a => a.type === 'credit');
   const activeMonthlySpend = activeTxns
-    .filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return new Date(t.date) >= _spendMonthStart && new Date(t.date) <= _spendNow; })
+    .filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return txnDate(t.date) >= _spendMonthStart && txnDate(t.date) <= _spendNow; })
     .reduce((s, t) => s + t.amount, 0);
   const activeTotalPortfolio = activeHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
 
@@ -6206,8 +6212,8 @@ export default function Dashboard() {
         const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lmEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-        const mTxns  = activeTxns.filter(t => { const d = new Date(t.date); return d >= mStart && d <= now; });
-        const lmTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= lmStart && d <= lmEnd; });
+        const mTxns  = activeTxns.filter(t => { const d = txnDate(t.date); return d >= mStart && d <= now; });
+        const lmTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= lmStart && d <= lmEnd; });
         const _mrHasCCAccts = activeAccounts.some(a => a.type === 'credit');
         const INCOME_CATS_MR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
         const isIncMR = t => { if (t.amount >= 0 || isTransfer(t)) return false; const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' '); return [...INCOME_CATS_MR].some(k => cat.includes(k)); };
@@ -6918,7 +6924,7 @@ export default function Dashboard() {
                   const billsDue = [];
                   Object.values(groups).forEach(({ name, txns }) => {
                     if (txns.length < 2) return;
-                    const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                    const sorted = [...txns].sort((a, b) => txnDate(a.date) - txnDate(b.date));
                     const amounts = sorted.map(t => t.amount);
                     const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
                     if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
@@ -7136,7 +7142,7 @@ export default function Dashboard() {
                       const catTotal = activeTxns.filter(t => {
                         if (t.amount <= 0 || isTransfer(t)) return false;
                         if (_ftspHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
-                        const d = new Date(t.date);
+                        const d = txnDate(t.date);
                         return d >= monthStart2 && d <= now && resolveCategory(t) === cat;
                       }).reduce((a, t) => a + t.amount, 0);
                       return s + catTotal;
@@ -7195,7 +7201,7 @@ export default function Dashboard() {
                     ({ monthIncome, monthSpending, saved, rate } = DEMO);
                   } else {
                     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                    const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
+                    const monthTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= monthStart && d <= now; });
                     const INCOME_CATS_SR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
                     monthIncome   = monthTxns.filter(t => {
                       if (t.amount >= 0 || isTransfer(t)) return false;
@@ -7528,7 +7534,7 @@ export default function Dashboard() {
                     });
                     Object.values(subGroups).forEach(({ name, txns }) => {
                       if (txns.length < 2) return;
-                      const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                      const sorted = [...txns].sort((a, b) => txnDate(a.date) - txnDate(b.date));
                       const amounts = sorted.map(t => t.amount);
                       const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
                       if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
@@ -7722,7 +7728,7 @@ export default function Dashboard() {
                             activeTxns.filter(t => {
                               if (t.amount <= 0 || isTransfer(t)) return false;
                               if (_ftspHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
-                              const d = new Date(t.date);
+                              const d = txnDate(t.date);
                               return d >= monthStart2 && d <= now;
                             }).map(t => resolveCategory(t))
                           );
@@ -7751,7 +7757,7 @@ export default function Dashboard() {
                             const catTotal = activeTxns.filter(t => {
                               if (t.amount <= 0 || isTransfer(t)) return false;
                               if (_ftspHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
-                              const d = new Date(t.date);
+                              const d = txnDate(t.date);
                               return d >= monthStart2 && d <= now && resolveCategory(t) === cat;
                             }).reduce((a, t) => a + t.amount, 0);
                             return s + catTotal;
@@ -7809,7 +7815,7 @@ export default function Dashboard() {
                           ({ monthIncome, monthSpending, saved, rate } = DEMO);
                         } else {
                           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                          const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
+                          const monthTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= monthStart && d <= now; });
                           const INCOME_CATS_SR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
                           monthIncome = monthTxns.filter(t => {
                             if (t.amount >= 0 || isTransfer(t)) return false;
@@ -8118,7 +8124,7 @@ export default function Dashboard() {
                           });
                           Object.values(subGroups).forEach(({ name, txns }) => {
                             if (txns.length < 2) return;
-                            const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                            const sorted = [...txns].sort((a, b) => txnDate(a.date) - txnDate(b.date));
                             const amounts = sorted.map(t => t.amount);
                             const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
                             if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
@@ -8302,7 +8308,7 @@ export default function Dashboard() {
                         activeTxns.filter(t => {
                           if (t.amount <= 0 || isTransfer(t)) return false;
                           if (_hasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
-                          const d = new Date(t.date);
+                          const d = txnDate(t.date);
                           return d >= monthStart && d <= now;
                         }).forEach(t => {
                           const c = fmtCat(resolveCategory(t));
@@ -8371,7 +8377,7 @@ export default function Dashboard() {
                         const subs = [];
                         Object.values(groups).forEach(({ name, txns }) => {
                           if (txns.length < 2) return;
-                          const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                          const sorted = [...txns].sort((a, b) => txnDate(a.date) - txnDate(b.date));
                           const amounts = sorted.map(t => t.amount);
                           const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
                           if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
@@ -8515,7 +8521,7 @@ export default function Dashboard() {
                                 const spent = activeTxns.filter(t => {
                                   if (t.amount <= 0 || isTransfer(t)) return false;
                                   if (_bpHasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false;
-                                  const d = new Date(t.date);
+                                  const d = txnDate(t.date);
                                   return d >= monthStart && d <= now && resolveCategory(t) === cat;
                                 }).reduce((s, t) => s + t.amount, 0);
                                 const pct = Math.min((spent / limit) * 100, 100);
@@ -9330,7 +9336,7 @@ export default function Dashboard() {
                     const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
                     const start = new Date(d.getFullYear(), d.getMonth(), 1);
                     const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-                    const txns  = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && isIncomeTxn(t); });
+                    const txns  = activeTxns.filter(t => { const td = txnDate(t.date); return td >= start && td <= end && isIncomeTxn(t); });
                     const srcMap = {};
                     txns.forEach(t => {
                       const c = fmtCat(resolveCategory(t));
@@ -9425,7 +9431,7 @@ export default function Dashboard() {
                           const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
                           const start = new Date(d.getFullYear(), d.getMonth(), 1);
                           const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-                          const allTxns = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end; });
+                          const allTxns = activeTxns.filter(t => { const td = txnDate(t.date); return td >= start && td <= end; });
                           const _hasCCAccts = activeAccounts.some(a => a.type === 'credit');
                           const INCOME_CATS_SR2 = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
                           expByMonth.push(allTxns.filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCCAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return true; }).reduce((s, t) => s + t.amount, 0));
@@ -9534,7 +9540,7 @@ export default function Dashboard() {
                             {useReal && selMonth.txns.length > 0 && (
                               <div style={{ marginTop: 20, borderTop: `1px solid ${BORDER_C}`, paddingTop: 16 }}>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: TEXT2, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Transactions</div>
-                                {selMonth.txns.sort((a, b) => new Date(b.date) - new Date(a.date)).map((t, i) => (
+                                {selMonth.txns.sort((a, b) => txnDate(b.date) - txnDate(a.date)).map((t, i) => (
                                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: i < selMonth.txns.length - 1 ? `1px solid ${BORDER_C}` : 'none', gap: 10 }}>
                                     <div style={{ minWidth: 0 }}>
                                       <div style={{ fontWeight: 500, fontSize: 13 }}>{t.merchant_name || t.name}</div>
@@ -9585,7 +9591,7 @@ export default function Dashboard() {
                     const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
                     const label     = d.toLocaleDateString('en-US', { month: 'short' });
                     const fullLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    const txns  = activeTxns.filter(t => { const td = new Date(t.date); return td >= start && td <= end && t.amount > 0 && !isExcludedSpend(t); });
+                    const txns  = activeTxns.filter(t => { const td = txnDate(t.date); return td >= start && td <= end && t.amount > 0 && !isExcludedSpend(t); });
                     const total = txns.reduce((s, t) => s + t.amount, 0);
                     const catMap = {};
                     txns.forEach(t => { const c = fmtCat(resolveCategory(t)); catMap[c] = (catMap[c] || 0) + t.amount; });
@@ -9639,7 +9645,7 @@ export default function Dashboard() {
                     {
                       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       const ct = {};
-                      activeTxns.filter(t => t.amount > 0 && !isExcludedSpend(t) && new Date(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
+                      activeTxns.filter(t => t.amount > 0 && !isExcludedSpend(t) && txnDate(t.date) >= monthStart).forEach(t => { const c = resolveCategory(t); ct[c] = (ct[c] || 0) + t.amount; });
                       displayBudget = Object.entries(ct).map(([category, total]) => ({ category, total: Math.round(total * 100) / 100 })).sort((a, b) => b.total - a.total);
                     }
                   } else {
@@ -9711,7 +9717,7 @@ export default function Dashboard() {
                     } else {
                       catTxns = activeTxns.filter(t => {
                         const cat = resolveCategory(t);
-                        const td  = new Date(t.date);
+                        const td  = txnDate(t.date);
                         return cat === selectedCategory && t.amount > 0 && !isTransfer(t) && td >= selStart && td <= selEnd;
                       });
                       total = catTxns.reduce((s, t) => s + t.amount, 0);
@@ -9737,7 +9743,7 @@ export default function Dashboard() {
                             <div style={{ fontWeight: 600 }}>{fmtCat(selectedCategory)}</div>
                             <div style={{ fontSize: 12, color: TEXT2 }}>{selLabel}</div>
                           </div>
-                          {catTxns.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).map((t, i) => {
+                          {catTxns.slice().sort((a, b) => txnDate(b.date) - txnDate(a.date)).map((t, i) => {
                             const isOverridden = t.transaction_id && txnCategoryOverrides[t.transaction_id];
                             return (
                             <div key={i} style={{ padding: '10px 0', borderBottom: i < catTxns.length - 1 ? `1px solid ${BORDER_C}` : 'none' }}>
@@ -10209,7 +10215,7 @@ export default function Dashboard() {
                   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
                   const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
-                  const inRange = (t, from, to) => { const d = new Date(t.date); return d >= from && d <= to; };
+                  const inRange = (t, from, to) => { const d = txnDate(t.date); return d >= from && d <= to; };
                   const thisTxns = activeTxns.filter(t => inRange(t, thisMonthStart, now));
                   const lastTxns = activeTxns.filter(t => inRange(t, lastMonthStart, lastMonthEnd));
                   const INCOME_CATS_TR = new Set(['income', 'payroll', 'wages', 'salary', 'deposit', 'interest', 'dividends', 'financial aid', 'rent']);
@@ -10326,7 +10332,7 @@ export default function Dashboard() {
                   const subs = [];
                   Object.values(groups).forEach(({ name, txns }) => {
                     if (txns.length < 2) return;
-                    const sorted = [...txns].sort((a, b) => new Date(a.date) - new Date(b.date));
+                    const sorted = [...txns].sort((a, b) => txnDate(a.date) - txnDate(b.date));
                     const amounts = sorted.map(t => t.amount);
                     const avgAmt  = amounts.reduce((s, a) => s + a, 0) / amounts.length;
                     if (amounts.some(a => Math.abs(a - avgAmt) / avgAmt > 0.15)) return;
@@ -10542,7 +10548,7 @@ export default function Dashboard() {
                         } else {
                           pv = Math.max(netWorth, 0);
                           const monthStart = new Date(_now.getFullYear(), _now.getMonth(), 1);
-                          const monthTxns = activeTxns.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= _now; });
+                          const monthTxns = activeTxns.filter(t => { const d = txnDate(t.date); return d >= monthStart && d <= _now; });
                           const mInc = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
                           monthlySavings = Math.max(mInc - activeMonthlySpend, 0);
                         }
@@ -11038,7 +11044,7 @@ export default function Dashboard() {
                 return activeTxns.filter(t => {
                   if (t.amount >= 0) return false;
                   const cat = resolveCategory(t).toLowerCase().replace(/_/g, ' ');
-                  return new Date(t.date) >= cutoff && INCOME_CATS_TAX.some(k => cat.includes(k));
+                  return txnDate(t.date) >= cutoff && INCOME_CATS_TAX.some(k => cat.includes(k));
                 }).reduce((s, t) => s + Math.abs(t.amount), 0);
               })();
               const investmentValue = hasRealIncomeTax
@@ -13773,7 +13779,7 @@ export default function Dashboard() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 4 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, lineHeight: 1.35, flex: 1 }}>{ann.title}</div>
-                                <div style={{ fontSize: 10, color: TEXT3, flexShrink: 0, marginTop: 2 }}>{new Date(ann.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                <div style={{ fontSize: 10, color: TEXT3, flexShrink: 0, marginTop: 2 }}>{txnDate(ann.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
                               </div>
                               <div style={{ fontSize: 11, color: TEXT3, marginBottom: 6 }}>
                                 {ann.course}{ann.courseCode ? ` (${ann.courseCode})` : ''} · {ann.from}
@@ -14635,7 +14641,7 @@ export default function Dashboard() {
                         try {
                           const now = new Date();
                           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                          const monthTxns = transactions.filter(t => { const d = new Date(t.date); return d >= monthStart && d <= now; });
+                          const monthTxns = transactions.filter(t => { const d = txnDate(t.date); return d >= monthStart && d <= now; });
                           const income = monthTxns.filter(t => t.amount < 0 && !isTransfer(t)).reduce((s, t) => s + Math.abs(t.amount), 0);
                           const spending = monthTxns.filter(t => t.amount > 0 && !isTransfer(t)).reduce((s, t) => s + t.amount, 0);
                           const catMap = {};
@@ -14997,7 +15003,7 @@ export default function Dashboard() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                                           <div style={{ fontSize: 13, fontWeight: 600, color: BLUE, cursor: 'pointer', lineHeight: 1.35 }}>{ann.title}</div>
                                           <div style={{ fontSize: 10, color: TEXT3, flexShrink: 0, marginLeft: 10, marginTop: 2 }}>
-                                            {new Date(ann.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                            {txnDate(ann.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                           </div>
                                         </div>
                                         <div style={{ fontSize: 11, color: TEXT3, marginBottom: 6 }}>Posted by {ann.from}</div>
@@ -17304,7 +17310,7 @@ export default function Dashboard() {
                     <div style={{ ...CARD, marginBottom: 20 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>All Transactions This Month</div>
                       <div style={{ maxHeight: 320, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
-                        {txns.sort((a, b) => new Date(b.date) - new Date(a.date)).map((t, i) => {
+                        {txns.sort((a, b) => txnDate(b.date) - txnDate(a.date)).map((t, i) => {
                           const meta = CAT_META[resolveCategory(t)] || { label: 'Other', color: TEXT3 };
                           return (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${BORDER_C}` }}>

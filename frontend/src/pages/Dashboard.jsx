@@ -4349,9 +4349,11 @@ export default function Dashboard() {
         const sharePriced = SHARE_PRICED_HOLDING_TYPES.includes(m.asset_type);
         const livePrice = sharePriced && m.ticker ? (manualPriceMap[m.ticker] || 0) : null;
         const qty = sharePriced ? (m.shares || 0) : 1;
-        // manual_value is the source of truth for a flat-value holding; fall back to shares
-        // × cost basis only for older rows saved before this field was always populated.
-        const price = sharePriced ? livePrice : (m.manual_value ?? ((m.shares || 0) * (m.cost_per_share || 0)));
+        // manual_value is the only source of truth for a flat-value holding. Do NOT fall back
+        // to shares × cost_per_share here — those fields can hold stale share-style data from
+        // before this holding was (re)saved as flat-value, and reusing them silently recreates
+        // whatever wrong number was there before instead of surfacing that it needs fixing.
+        const price = sharePriced ? livePrice : (m.manual_value || 0);
         return {
           quantity: qty,
           institution_price: price,

@@ -286,6 +286,10 @@ try {
     )
   `);
 } catch {}
+// Explicit valuation mode ('share' = quantity x live quote, 'value' = flat manual dollar
+// amount) so pricing is never inferred from whether a ticker happens to be filled in —
+// that ambiguity is what let a bond get valued like a stock in the first place.
+try { db.exec(`ALTER TABLE manual_holdings ADD COLUMN pricing_mode TEXT`); } catch {}
 
 try { db.exec(`ALTER TABLE users ADD COLUMN promo_code_redeemed TEXT`); } catch {}
 

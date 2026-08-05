@@ -355,25 +355,32 @@ router.get('/manual-holdings', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+const VALID_PRICING_MODES = ['share', 'value'];
+// Legacy rows (and any request that omits it) fall back to inferring from asset_type,
+// matching the safe default already used for existing data.
+const inferPricingMode = (asset_type) => ['stock', 'etf', 'crypto'].includes(asset_type) ? 'share' : 'value';
+
 router.post('/manual-holdings', requireAuth, (req, res) => {
-  const { ticker, name, asset_type = 'stock', shares = 0, cost_per_share = 0, manual_value, purchase_date } = req.body;
+  const { ticker, name, asset_type = 'stock', shares = 0, cost_per_share = 0, manual_value, purchase_date, pricing_mode } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  const mode = VALID_PRICING_MODES.includes(pricing_mode) ? pricing_mode : inferPricingMode(asset_type);
   const r = db.prepare(
-    'INSERT INTO manual_holdings (user_id, ticker, name, asset_type, shares, cost_per_share, manual_value, purchase_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(req.user.id, ticker || null, name, asset_type, shares, cost_per_share, manual_value ?? null, purchase_date || null);
+    'INSERT INTO manual_holdings (user_id, ticker, name, asset_type, shares, cost_per_share, manual_value, purchase_date, pricing_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(req.user.id, ticker || null, name, asset_type, shares, cost_per_share, manual_value ?? null, purchase_date || null, mode);
   res.json(db.prepare('SELECT * FROM manual_holdings WHERE id = ?').get(r.lastInsertRowid));
 });
 
 router.patch('/manual-holdings/:id', requireAuth, (req, res) => {
   const row = db.prepare('SELECT * FROM manual_holdings WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'not found' });
-  const { ticker, name, asset_type, shares, cost_per_share, manual_value, purchase_date } = req.body;
+  const { ticker, name, asset_type, shares, cost_per_share, manual_value, purchase_date, pricing_mode } = req.body;
+  const mode = VALID_PRICING_MODES.includes(pricing_mode) ? pricing_mode : (row.pricing_mode || inferPricingMode(asset_type ?? row.asset_type));
   db.prepare(
-    `UPDATE manual_holdings SET ticker=?, name=?, asset_type=?, shares=?, cost_per_share=?, manual_value=?, purchase_date=?, updated_at=datetime('now') WHERE id=? AND user_id=?`
+    `UPDATE manual_holdings SET ticker=?, name=?, asset_type=?, shares=?, cost_per_share=?, manual_value=?, purchase_date=?, pricing_mode=?, updated_at=datetime('now') WHERE id=? AND user_id=?`
   ).run(
     ticker ?? row.ticker, name ?? row.name, asset_type ?? row.asset_type,
     shares ?? row.shares, cost_per_share ?? row.cost_per_share,
-    manual_value ?? row.manual_value, purchase_date ?? row.purchase_date,
+    manual_value ?? row.manual_value, purchase_date ?? row.purchase_date, mode,
     req.params.id, req.user.id
   );
   res.json(db.prepare('SELECT * FROM manual_holdings WHERE id = ?').get(req.params.id));

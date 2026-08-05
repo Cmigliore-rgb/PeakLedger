@@ -3581,7 +3581,7 @@ export default function Dashboard() {
   const [holdingsExpanded, setHoldingsExpanded] = useState(false);
   const [showManualHoldingForm, setShowManualHoldingForm] = useState(false);
   const [manualHoldingEdit, setManualHoldingEdit] = useState(null); // raw manual holding being edited
-  const [manualHoldingForm, setManualHoldingForm] = useState({ ticker: '', name: '', asset_type: 'stock', shares: '', cost_per_share: '', manual_value: '', purchase_date: '' });
+  const [manualHoldingForm, setManualHoldingForm] = useState({ ticker: '', name: '', asset_type: 'stock', shares: '', cost_per_share: '', manual_value: '', purchase_date: '', pricing_mode: 'share' });
   const [manualHoldingSaving, setManualHoldingSaving] = useState(false);
   const [invTab, setInvTab] = useState('stocks');
   const [selectedSector, setSelectedSector] = useState(null);
@@ -4335,10 +4335,11 @@ export default function Dashboard() {
       // Merge manual holdings: fetch live prices for ticker-based ones
       const rawManual = manualHoldRes.status === 'fulfilled' ? manualHoldRes.value.data : [];
       let manualPriceMap = {};
-      // Only stock/ETF/crypto are priced per-share off a live quote. Bonds/cash/other are a
-      // flat dollar amount the user enters directly, even if they also attached an optional
-      // ticker for display — fetching a live quote for those would price them like a stock.
-      const manualTickers = rawManual.filter(m => m.ticker && SHARE_PRICED_HOLDING_TYPES.includes(m.asset_type)).map(m => m.ticker);
+      // pricing_mode is the explicit, permanent record of how a holding should be valued —
+      // 'share' (quantity x live quote) or 'value' (flat dollar amount). Rows saved before
+      // this field existed fall back to inferring it from asset_type, same as the backend.
+      const isSharePriced = m => m.pricing_mode ? m.pricing_mode === 'share' : SHARE_PRICED_HOLDING_TYPES.includes(m.asset_type);
+      const manualTickers = rawManual.filter(m => m.ticker && isSharePriced(m)).map(m => m.ticker);
       if (manualTickers.length > 0) {
         try {
           const pr = await api.get('/market/quotes', { params: { symbols: manualTickers.join(',') } });
@@ -4346,7 +4347,7 @@ export default function Dashboard() {
         } catch {}
       }
       const manualHoldingsFormatted = rawManual.map(m => {
-        const sharePriced = SHARE_PRICED_HOLDING_TYPES.includes(m.asset_type);
+        const sharePriced = isSharePriced(m);
         const livePrice = sharePriced && m.ticker ? (manualPriceMap[m.ticker] || 0) : null;
         const qty = sharePriced ? (m.shares || 0) : 1;
         // manual_value is the only source of truth for a flat-value holding. Do NOT fall back
@@ -11784,7 +11785,7 @@ export default function Dashboard() {
                                   <td style={{ padding:'10px 12px', textAlign:'right' }}>
                                     {h._manual ? (
                                       <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }} onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => { const m=h._manual_raw; setManualHoldingEdit(m); setManualHoldingForm({ ticker:m.ticker||'', name:m.name, asset_type:m.asset_type, shares:String(m.shares||''), cost_per_share:String(m.cost_per_share||''), manual_value:String(m.manual_value||''), purchase_date:m.purchase_date||'' }); setShowManualHoldingForm(true); }}
+                                        <button onClick={() => { const m=h._manual_raw; setManualHoldingEdit(m); const pm = m.pricing_mode || (SHARE_PRICED_HOLDING_TYPES.includes(m.asset_type) ? 'share' : 'value'); setManualHoldingForm({ ticker:m.ticker||'', name:m.name, asset_type:m.asset_type, shares:String(m.shares||''), cost_per_share:String(m.cost_per_share||''), manual_value:String(m.manual_value||''), purchase_date:m.purchase_date||'', pricing_mode: pm }); setShowManualHoldingForm(true); }}
                                           style={{ padding:'3px 8px', background:'transparent', border:BORDER, borderRadius:5, color:TEXT2, fontSize:11, fontWeight:600, cursor:'pointer' }}>Edit</button>
                                         <button onClick={async () => { if(!window.confirm(`Delete "${h.security?.name}"?`)) return; await api.delete(`/plaid/manual-holdings/${h._manual_id}`); fetchAll(); }}
                                           style={{ padding:'3px 8px', background:'transparent', border:'1px solid rgba(248,113,113,0.3)', borderRadius:5, color:RED, fontSize:11, fontWeight:600, cursor:'pointer' }}>Del</button>
@@ -11909,38 +11910,56 @@ export default function Dashboard() {
                             </button>
                           );
                         })}
-                        <button onClick={() => { setManualHoldingEdit(null); setManualHoldingForm({ ticker:'', name:'', asset_type:'stock', shares:'', cost_per_share:'', manual_value:'', purchase_date:'' }); setShowManualHoldingForm(v => !v); }}
+                        <button onClick={() => { setManualHoldingEdit(null); setManualHoldingForm({ ticker:'', name:'', asset_type:'stock', shares:'', cost_per_share:'', manual_value:'', purchase_date:'', pricing_mode:'share' }); setShowManualHoldingForm(v => !v); }}
                           style={{ marginLeft:'auto', padding:'6px 14px', background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.3)', borderRadius:7, color:GREEN, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                           + Add Holding
                         </button>
                       </div>
 
                       {/* Manual holding form */}
-                      {showManualHoldingForm && (
+                      {showManualHoldingForm && (() => {
+                        const isLockedShare = SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type);
+                        const isBondAutoTrack = !isLockedShare && manualHoldingForm.pricing_mode === 'share';
+                        const isShareMode = isLockedShare || isBondAutoTrack;
+                        // A brand-new auto-tracked bond is entered as a dollar amount and converted to
+                        // shares via a fetched live price on save. Editing one that already has shares
+                        // on record just adjusts Shares/Cost per Share directly, like a stock — recomputing
+                        // shares from a prefilled amount against *today's* price on every open+save would
+                        // silently drift the share count each time.
+                        const showAmountField = isBondAutoTrack && !manualHoldingEdit;
+                        const showShareFields = isLockedShare || (isBondAutoTrack && !!manualHoldingEdit);
+                        return (
                         <div style={{ background:DARK, border:BORDER, borderRadius:10, padding:'14px 16px', marginBottom:16 }}>
                           <div style={{ fontSize:13, fontWeight:700, color:TEXT, marginBottom:12 }}>{manualHoldingEdit ? 'Edit Holding' : 'Add Manual Holding'}</div>
                           <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>{SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type) ? 'Ticker' : 'Ticker (optional)'}</label>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>{isShareMode ? 'Ticker' : 'Ticker (optional)'}</label>
                               <input value={manualHoldingForm.ticker} onChange={e => setManualHoldingForm(f => ({ ...f, ticker: e.target.value.toUpperCase() }))}
                                 placeholder="e.g. AAPL"
                                 style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
                             </div>
                             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>{SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type) ? 'Name (optional)' : 'Name'}</label>
+                              <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>{isShareMode ? 'Name (optional)' : 'Name'}</label>
                               <input value={manualHoldingForm.name} onChange={e => setManualHoldingForm(f => ({ ...f, name: e.target.value }))}
                                 placeholder="e.g. Apple Inc."
                                 style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none' }} />
                             </div>
                             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                               <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Type</label>
-                              <select value={manualHoldingForm.asset_type} onChange={e => setManualHoldingForm(f => ({ ...f, asset_type: e.target.value }))}
+                              <select value={manualHoldingForm.asset_type} onChange={e => { const v = e.target.value; setManualHoldingForm(f => ({ ...f, asset_type: v, pricing_mode: SHARE_PRICED_HOLDING_TYPES.includes(v) ? 'share' : f.pricing_mode })); }}
                                 style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', cursor:'pointer' }}>
                                 {[['stock','Stock'],['etf','ETF'],['bonds','Bond'],['crypto','Crypto'],['cash','Cash'],['other','Other']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
                               </select>
                             </div>
                           </div>
-                          {SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type) ? (
+                          {!isLockedShare && (
+                            <label style={{ display:'flex', alignItems:'center', gap:7, fontSize:12, color:TEXT2, marginBottom:10, cursor:'pointer' }}>
+                              <input type="checkbox" checked={isBondAutoTrack}
+                                onChange={e => setManualHoldingForm(f => ({ ...f, pricing_mode: e.target.checked ? 'share' : 'value' }))} />
+                              Track automatically with a ticker (e.g. a bond ETF like BND)
+                            </label>
+                          )}
+                          {showShareFields ? (
                             <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                               <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                                 <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Shares</label>
@@ -11951,6 +11970,20 @@ export default function Dashboard() {
                               <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                                 <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Cost per Share ($)</label>
                                 <input type="number" value={manualHoldingForm.cost_per_share} onChange={e => setManualHoldingForm(f => ({ ...f, cost_per_share: e.target.value }))}
+                                  placeholder="0.00"
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
+                              </div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Purchase Date</label>
+                                <input type="date" value={manualHoldingForm.purchase_date} onChange={e => setManualHoldingForm(f => ({ ...f, purchase_date: e.target.value }))}
+                                  style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', colorScheme:'dark' }} />
+                              </div>
+                            </div>
+                          ) : showAmountField ? (
+                            <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr', gap:10, marginBottom:10 }}>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <label style={{ fontSize:11, color:TEXT3, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px' }}>Amount Invested ($)</label>
+                                <input type="number" value={manualHoldingForm.manual_value} onChange={e => setManualHoldingForm(f => ({ ...f, manual_value: e.target.value }))}
                                   placeholder="0.00"
                                   style={{ background:CARD_BG, border:BORDER, borderRadius:7, padding:'8px 10px', fontSize:13, color:TEXT, outline:'none', fontFamily:'monospace' }} />
                               </div>
@@ -11975,26 +12008,64 @@ export default function Dashboard() {
                               </div>
                             </div>
                           )}
-                          {SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type) && manualHoldingForm.ticker && (
-                            <div style={{ fontSize:11, color:TEXT3, marginBottom:10 }}>Live price will be fetched from Yahoo Finance on save.</div>
+                          {isShareMode && manualHoldingForm.ticker && (
+                            <div style={{ fontSize:11, color:TEXT3, marginBottom:10 }}>
+                              {showAmountField ? 'Shares will be calculated from a live price fetched on save, and tracked automatically from then on.' : 'Live price will be fetched from Yahoo Finance on save.'}
+                            </div>
                           )}
                           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
                             <button onClick={() => { setShowManualHoldingForm(false); setManualHoldingEdit(null); }}
                               style={{ padding:'7px 16px', background:'transparent', border:BORDER, borderRadius:7, color:TEXT2, fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancel</button>
-                            <button disabled={manualHoldingSaving || (SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type) ? !manualHoldingForm.ticker.trim() : !manualHoldingForm.name.trim())}
+                            <button disabled={manualHoldingSaving || (isShareMode ? !manualHoldingForm.ticker.trim() : !manualHoldingForm.name.trim())}
                               onClick={async () => {
                                 setManualHoldingSaving(true);
-                                const sharePriced = SHARE_PRICED_HOLDING_TYPES.includes(manualHoldingForm.asset_type);
-                                const body = {
-                                  ticker: manualHoldingForm.ticker || null,
-                                  name: manualHoldingForm.name,
-                                  asset_type: manualHoldingForm.asset_type,
-                                  shares: parseFloat(manualHoldingForm.shares) || 0,
-                                  cost_per_share: parseFloat(manualHoldingForm.cost_per_share) || 0,
-                                  manual_value: sharePriced ? null : (parseFloat(manualHoldingForm.manual_value) || 0),
-                                  purchase_date: manualHoldingForm.purchase_date || null,
-                                };
                                 try {
+                                  let body;
+                                  if (showAmountField) {
+                                    const amount = parseFloat(manualHoldingForm.manual_value) || 0;
+                                    let price = 0;
+                                    try {
+                                      const pr = await api.get('/market/quotes', { params: { symbols: manualHoldingForm.ticker } });
+                                      price = (pr.data?.quotes || []).find(q => q.symbol === manualHoldingForm.ticker)?.price || pr.data?.quotes?.[0]?.price || 0;
+                                    } catch {}
+                                    if (!price) {
+                                      alert(`Couldn't fetch a live price for "${manualHoldingForm.ticker}". Double-check the ticker, or uncheck "Track automatically" to enter a flat value instead.`);
+                                      setManualHoldingSaving(false);
+                                      return;
+                                    }
+                                    body = {
+                                      ticker: manualHoldingForm.ticker,
+                                      name: manualHoldingForm.name || manualHoldingForm.ticker,
+                                      asset_type: manualHoldingForm.asset_type,
+                                      shares: amount / price,
+                                      cost_per_share: price,
+                                      manual_value: null,
+                                      purchase_date: manualHoldingForm.purchase_date || null,
+                                      pricing_mode: 'share',
+                                    };
+                                  } else if (isShareMode) {
+                                    body = {
+                                      ticker: manualHoldingForm.ticker || null,
+                                      name: manualHoldingForm.name,
+                                      asset_type: manualHoldingForm.asset_type,
+                                      shares: parseFloat(manualHoldingForm.shares) || 0,
+                                      cost_per_share: parseFloat(manualHoldingForm.cost_per_share) || 0,
+                                      manual_value: null,
+                                      purchase_date: manualHoldingForm.purchase_date || null,
+                                      pricing_mode: 'share',
+                                    };
+                                  } else {
+                                    body = {
+                                      ticker: manualHoldingForm.ticker || null,
+                                      name: manualHoldingForm.name,
+                                      asset_type: manualHoldingForm.asset_type,
+                                      shares: 0,
+                                      cost_per_share: 0,
+                                      manual_value: parseFloat(manualHoldingForm.manual_value) || 0,
+                                      purchase_date: manualHoldingForm.purchase_date || null,
+                                      pricing_mode: 'value',
+                                    };
+                                  }
                                   if (manualHoldingEdit) await api.patch(`/plaid/manual-holdings/${manualHoldingEdit.id}`, body);
                                   else await api.post('/plaid/manual-holdings', body);
                                   setShowManualHoldingForm(false);
@@ -12007,7 +12078,8 @@ export default function Dashboard() {
                             </button>
                           </div>
                         </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Pie + holdings grid */}
                       {activeHoldings.length>0 ? (

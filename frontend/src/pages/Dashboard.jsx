@@ -519,6 +519,19 @@ function logoUrls(name, ticker, logoUrl) {
   return urls;
 }
 
+// Dollar value of a holding. Some institutions report individual bond/CD positions
+// (Plaid security.type === 'fixed income') with quantity as face value and institution_price
+// quoted per $100 of face value — e.g. price 99.5 means the bond is trading at 99.5% of par.
+// Treated as a plain per-unit price, that convention inflates value ~100x (a $1,000 bond at
+// quantity 1000 / price ~100 becomes $100,000). Bond ETFs/funds are unaffected: Plaid gives
+// those security.type 'etf' / 'mutual fund', and they trade at a normal per-share price.
+function holdingValue(h) {
+  const qty = h.quantity || 0;
+  const price = h.institution_price || 0;
+  const isFixedIncome = (h.security?.type || '').toLowerCase() === 'fixed income';
+  return isFixedIncome ? qty * (price / 100) : qty * price;
+}
+
 function classifyHolding(h) {
   const ticker = (h.security?.ticker_symbol || '').toUpperCase();
   const type   = (h.security?.type || '').toLowerCase();
@@ -847,6 +860,11 @@ function NetWorthChart({ snapshots, onFixPoint }) {
           {snapshots.length} of {period} days of history collected. Chart fills in daily.
         </div>
       )}
+      {/* onMouseLeave lives on this wrapper (not the svg) so moving the cursor up into the
+          tooltip to click Fix doesn't itself count as leaving the chart and clear hoverIdx.
+          onMouseMove stays on the svg only, so hovering the tooltip/button never recomputes
+          hoverIdx from cursor position — the selected date stays locked to what was hovered. */}
+      <div onMouseLeave={() => setHoverIdx(null)}>
       {hSnap && (
         <div style={{ display: 'flex', justifyContent: tipOnLeft ? 'flex-start' : 'flex-end', marginBottom: 4 }}>
           <div style={{ background: DARK, border: BORDER, borderRadius: 7, padding: '5px 12px', display: 'inline-flex', gap: 14, alignItems: 'center' }}>
@@ -863,7 +881,6 @@ function NetWorthChart({ snapshots, onFixPoint }) {
       )}
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', cursor: 'crosshair' }}
         onMouseMove={e => setHoverIdx(getIdx(e.clientX))}
-        onMouseLeave={() => setHoverIdx(null)}
         onTouchMove={e => { e.preventDefault(); setHoverIdx(getIdx(e.touches[0].clientX)); }}
         onTouchEnd={() => setHoverIdx(null)}>
         {[0, 0.5, 1].map(t => {
@@ -902,6 +919,7 @@ function NetWorthChart({ snapshots, onFixPoint }) {
           </text>
         ))}
       </svg>
+      </div>
     </div>
   );
 }
@@ -4418,7 +4436,7 @@ export default function Dashboard() {
       // Exclude credit-type accounts — their debt is already captured in totalLiab from /liabilities
       // Exclude investment accounts — portfolio from holdings is the authoritative source
       const cash      = allAccounts.filter(a => a.type !== 'investment' && a.type !== 'credit').reduce((s, a) => s + (a.balances?.current || 0), 0);
-      const portfolio = [...plaidHoldings, ...manualHoldingsFormatted].reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
+      const portfolio = [...plaidHoldings, ...manualHoldingsFormatted].reduce((s, h) => s + (holdingValue(h)), 0);
       const liabData  = liabRes.status === 'fulfilled' ? liabRes.value.data : {};
       const snapCreditIds = new Set((liabData.credit || []).map(c => c.account_id));
       const snapCreditFallback = allAccounts.filter(a => a.type === 'credit' && !snapCreditIds.has(a.account_id));
@@ -4771,7 +4789,7 @@ export default function Dashboard() {
       budget.forEach(b => { budgetMap[fmtCat(b.category)] = { spent: b.total, limit: budgetLimits[b.category] }; });
       const slimAccounts = accounts.map(a => ({ name: a.name, type: a.type, balance: a.balances?.current ?? a.balance }));
       const slimTxns = transactions.slice(0, 40).map(t => ({ date: t.date, name: t.merchant_name || t.name, amount: t.amount, category: fmtCat(resolveCategory(t)) }));
-      const slimHoldings = holdings.map(h => ({ name: h.security?.name || h.name, ticker: h.security?.ticker_symbol || h.ticker_symbol, value: (h.quantity || 0) * (h.institution_price || 0) }));
+      const slimHoldings = holdings.map(h => ({ name: h.security?.name || h.name, ticker: h.security?.ticker_symbol || h.ticker_symbol, value: holdingValue(h) }));
       const extraContext = {};
       if (panelKey === 'investments') {
         extraContext.sectorAllocation = slimHoldings.map(h => ({ ticker: h.ticker, sector: sectorData[h.ticker] || 'Unknown', value: h.value }));
@@ -4798,7 +4816,7 @@ export default function Dashboard() {
   }, [accounts, transactions, holdings, budget, budgetLimits, sectorData, portfolioPerf, perfPeriod, streamChat]);
 
   const totalCash        = accounts.filter(a => !a.closed && a.type !== 'investment' && a.type !== 'credit').reduce((s, a) => s + (a.balances?.current || 0), 0);
-  const totalPortfolio   = holdings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
+  const totalPortfolio   = holdings.reduce((s, h) => s + (holdingValue(h)), 0);
   const totalLiabilities = [...(liabilities.credit || []), ...(liabilities.student || []), ...(liabilities.mortgage || []), ...(liabilities.car || [])].reduce((s, l) => s + (l.balances?.current || 0), 0);
   const netWorth         = totalCash + totalPortfolio - totalLiabilities;
   const animNetWorth     = useCountUp(netWorth);
@@ -4827,7 +4845,7 @@ export default function Dashboard() {
   const activeMonthlySpend = activeTxns
     .filter(t => { if (t.amount <= 0 || isTransfer(t)) return false; if (_hasCreditAccts && resolveCategory(t) === 'CREDIT_CARD_PAYMENT') return false; return txnDate(t.date) >= _spendMonthStart && txnDate(t.date) <= _spendNow; })
     .reduce((s, t) => s + t.amount, 0);
-  const activeTotalPortfolio = activeHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
+  const activeTotalPortfolio = activeHoldings.reduce((s, h) => s + (holdingValue(h)), 0);
 
   const fetchPortfolioAnalysis = useCallback(async (holdings, period) => {
     const positions = holdings
@@ -4915,7 +4933,7 @@ export default function Dashboard() {
       budget.forEach(b => { budgetMap[fmtCat(b.category)] = { spent: b.total, limit: budgetLimits[b.category] }; });
       const slimAccounts = accounts.map(a => ({ name: a.name, type: a.type, subtype: a.subtype, balance: a.balances?.current ?? a.balance }));
       const slimTxns     = transactions.slice(0, 40).map(t => ({ date: t.date, name: t.merchant_name || t.name, amount: t.amount, category: fmtCat(resolveCategory(t)) }));
-      const slimHoldings = holdings.map(h => ({ name: h.security?.name || h.name, ticker: h.security?.ticker_symbol || h.ticker_symbol, quantity: h.quantity, price: h.institution_price, value: (h.quantity || 0) * (h.institution_price || 0) }));
+      const slimHoldings = holdings.map(h => ({ name: h.security?.name || h.name, ticker: h.security?.ticker_symbol || h.ticker_symbol, quantity: h.quantity, price: h.institution_price, value: holdingValue(h) }));
       const placeholder = { role: 'assistant', content: '' };
       setChatMessages([...newHistory, placeholder]);
       let streamBuf = '';
@@ -8443,8 +8461,8 @@ export default function Dashboard() {
                       })();
                       case 'investment-snapshot': return (() => {
                         const investAccts = activeAccounts.filter(a => a.type === 'investment');
-                        const portValue = activeHoldings.reduce((s, h) => s + ((h.quantity || 0) * (h.institution_price || 0)), 0);
-                        const topHoldings = [...activeHoldings].sort((a, b) => ((b.quantity || 0) * (b.institution_price || 0)) - ((a.quantity || 0) * (a.institution_price || 0))).slice(0, 5);
+                        const portValue = activeHoldings.reduce((s, h) => s + (holdingValue(h)), 0);
+                        const topHoldings = [...activeHoldings].sort((a, b) => (holdingValue(b)) - (holdingValue(a))).slice(0, 5);
                         if (investAccts.length === 0 && !isDemoData) return (
                           <div className="lc" style={{ ...CARD, marginBottom: 16 }}>
                             <div style={{ fontWeight: 600, marginBottom: 8 }}>Investment Snapshot</div>
@@ -8461,7 +8479,7 @@ export default function Dashboard() {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                                 {topHoldings.map(h => {
                                   const sym = h.security?.ticker_symbol || h.security?.name || 'Unknown';
-                                  const val = (h.quantity || 0) * (h.institution_price || 0);
+                                  const val = holdingValue(h);
                                   const pct = portValue > 0 ? ((val / portValue) * 100).toFixed(1) : 0;
                                   return (
                                     <div key={h.security_id || sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER_C}` }}>
@@ -11638,7 +11656,7 @@ export default function Dashboard() {
 
                   const typeValues = { stocks:0, etf:0, bonds:0, crypto:0, cash:0 };
                   classified.forEach(h => {
-                    const v = (h.quantity||0)*(h.institution_price||0);
+                    const v = holdingValue(h);
                     if (typeValues[h._type] !== undefined) typeValues[h._type] += v;
                   });
                   const pieTotal = Object.values(typeValues).reduce((s,v)=>s+v,0)||1;
@@ -11650,7 +11668,7 @@ export default function Dashboard() {
                   classified.filter(h=>h._type==='stocks').forEach(h=>{
                     const t=h.security?.ticker_symbol; if(!t) return;
                     const sect=ETF_SECTOR[t]||sectorData[t]||'Other';
-                    sectorGroups[sect]=(sectorGroups[sect]||0)+(h.quantity||0)*(h.institution_price||0);
+                    sectorGroups[sect]=(sectorGroups[sect]||0)+holdingValue(h);
                   });
                   const stockTotal=Object.values(sectorGroups).reduce((s,v)=>s+v,0)||1;
                   const topSectors=Object.entries(sectorGroups).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([name,val])=>({name,val,pct:(val/stockTotal)*100}));
@@ -11697,7 +11715,7 @@ export default function Dashboard() {
                           {holdings.map((h,i)=>{
                             const ticker=h.security?.ticker_symbol||'—';
                             const name=h.security?.name||'—';
-                            const qty=h.quantity||0, price=h.institution_price||0, value=qty*price;
+                            const qty=h.quantity||0, price=h.institution_price||0, value=holdingValue(h);
                             const ext=extendedTickerData[ticker]||{};
                             const periodPct=ticker!=='—'?ext[activePeriodField]??null:null;
                             return (
@@ -11731,7 +11749,7 @@ export default function Dashboard() {
                             {holdings.map((h,i)=>{
                               const ticker=h.security?.ticker_symbol||'—';
                               const name=h.security?.name||'—';
-                              const qty=h.quantity||0, price=h.institution_price||0, value=qty*price;
+                              const qty=h.quantity||0, price=h.institution_price||0, value=holdingValue(h);
                               const ext=extendedTickerData[ticker]||{};
                               const periodPct=ticker!=='—'?ext[activePeriodField]??null:null;
                               const dollarChg=periodPct!=null ? value*(periodPct/100)/(1+periodPct/100) : null;
@@ -11849,7 +11867,7 @@ export default function Dashboard() {
                           const ticker = h.security?.ticker_symbol?.toUpperCase();
                           const er = ticker ? EXPENSE_RATIOS[ticker] : undefined;
                           if (er == null) return null;
-                          const value = (h.quantity || 0) * (h.institution_price || 0);
+                          const value = holdingValue(h);
                           return { ticker, name: h.security?.name || ticker, value, er, annualDrag: value * er / 100 };
                         }).filter(Boolean).sort((a, b) => b.annualDrag - a.annualDrag);
                         if (feeHoldings.length === 0) return null;
